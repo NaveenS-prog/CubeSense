@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
+:root {
+  --bg-dark: #0a0a0a;
+  --bg-darker: #040404;
+  --neon-green: #39ff14;
+  --neon-green-dim: rgba(57, 255, 20, 0.2);
+  --text-light: #e0e0e0;
+  --text-muted: #888888;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-light);
+  font-family: 'Inter', sans-serif;
+}
+
+/* Smooth transitions */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Neon button */
+.neon-button {
+  @apply relative inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[var(--neon-green)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--neon-green)];
+  box-shadow: 0 0 0 2px var(--neon-green-dim), 0 0 8px 2px var(--neon-green-dim);
+}
+
+.neon-button:hover {
+  background-color: rgba(57, 255, 20, 0.9);
+}
+
+/* Tab styles */
+.tab-button {
+  @apply px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-light)] transition-colors border-b-2 border-transparent;
+}
+
+.tab-button:hover {
+  border-color: rgba(57, 255, 20, 0.5);
+}
+
+.tab-button.active {
+  @apply text-[var(--neon-green)] border-b-2 border-[var(--neon-green)];
+}
+
+/* Timer display */
+.timer-display {
+  @apply text-5xl font-bold tracking-tighter text-[var(--neon-green)] font-mono;
+}
+
+.timer-display.ready {
+  @apply text-[var(--neon-green)] animate-pulse;
+}
+
+.timer-display.running {
+  @apply text-[var(--text-light)];
+}
+
+.timer-display.stopped {
+  @apply text-[var(--text-muted)];
+}
+
+/* Scramble display */
+.scramble {
+  @apply text-xl font-mono text-[var(--text-muted)] bg-[var(--bg-darker)] px-4 py-2 rounded-md border;
+  border-color: rgba(57, 255, 20, 0.2);
+}
+
+/* History item */
+.history-item {
+  @apply px-4 py-2 text-sm flex justify-between items-center border-b;
+  border-color: rgba(57, 255, 20, 0.1);
+}
+
+/* Algo card */
+.algo-card {
+  @apply px-4 py-3 bg-[var(--bg-darker)] rounded-lg border cursor-pointer;
+  border-color: rgba(57, 255, 20, 0.2);
+  transition-property: border-color;
+}
+
+.algo-card:hover {
+  background-color: rgba(57, 255, 20, 0.05);
+  border-color: rgba(57, 255, 20, 0.4);
+}
+
+.algo-name {
+  @apply text-lg font-semibold text-[var(--text-light)] mb-1;
+}
+
+.algo-notation {
+  @apply text-[var(--text-muted)] font-mono text-sm mb-2;
+}
+
+.algo-svg {
+  @apply w-16 h-16 mx-auto mb-2;
+}
+
+/* Practice button */
+.practice-button {
+  @apply w-full neon-button text-xs py-1.5;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .timer-display {
+    @apply text-4xl;
+  }
+
+  .scramble {
+    @apply text-lg;
+  }
+}
