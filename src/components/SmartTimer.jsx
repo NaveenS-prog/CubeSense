@@ -28,6 +28,7 @@ function SmartTimer() {
   const scrambleRef = useRef(scramble);
   const inspectionPenaltyRef = useRef(inspectionPenalty);
   const handsDownRef = useRef(false);
+  const ignoreNextSpaceUpRef = useRef(false);
 
   useEffect(() => {
     timerStatusRef.current = timerStatus;
@@ -216,6 +217,9 @@ function SmartTimer() {
 
       if (timerStatusRef.current === 'running') {
         e.preventDefault();
+        if (e.code === 'Space') {
+          ignoreNextSpaceUpRef.current = true;
+        }
         stopSolve();
         return;
       }
@@ -231,6 +235,11 @@ function SmartTimer() {
     const handleKeyUp = (e) => {
       if (e.code !== 'Space') return;
       e.preventDefault();
+
+      if (ignoreNextSpaceUpRef.current) {
+        ignoreNextSpaceUpRef.current = false;
+        return;
+      }
 
       if (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped') {
         startInspection();
@@ -349,7 +358,7 @@ function SmartTimer() {
 
   const displayLabel = () => {
     if (timerStatus === 'inspection' || timerStatus === 'holding' || timerStatus === 'ready') {
-      return `${(inspectionRemaining / 1000).toFixed(2)}`;
+      return `${Math.ceil(inspectionRemaining / 1000)}`;
     }
 
     if (timerStatus === 'stopped' && history[0]?.penalty === 'DNF') {
