@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import SmartTimer from './components/SmartTimer';
 import AlgoTeacher from './components/AlgoTeacher';
 
@@ -39,6 +40,7 @@ function App() {
           </section>
         )}
       </main>
+      <Analytics />
     </div>
   );
 }
