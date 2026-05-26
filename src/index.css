@@ -55,6 +55,10 @@ body {
   @apply text-[var(--neon-green)] animate-pulse;
 }
 
+.timer-display.holding {
+  @apply text-red-500;
+}
+
 .timer-display.running {
   @apply text-[var(--text-light)];
 }

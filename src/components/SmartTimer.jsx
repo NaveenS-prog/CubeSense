@@ -1,41 +1,48 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { generateScramble } from '../utils/scramble';
 
-// Since we cannot rely on external icon libraries without installing, we'll use simple JSX for icons
-// or we can use lucide-react if installed. Let's assume we have lucide-react installed via dependencies.
-
-import { RefreshCw } from 'lucide-react';
+const INSPECTION_LIMIT_MS = 15000;
+const INSPECTION_DNF_MS = 17000;
+const HOLD_TO_START_MS = 300;
 
 function SmartTimer() {
-  const [timerStatus, setTimerStatus] = useState('idle'); // idle, ready, running, stopped
-  const [elapsedTime, setElapsedTime] = useState(0);
+  const [timerStatus, setTimerStatus] = useState('idle');
+  const [displayTime, setDisplayTime] = useState(0);
+  const [inspectionRemaining, setInspectionRemaining] = useState(INSPECTION_LIMIT_MS);
+  const [inspectionElapsed, setInspectionElapsed] = useState(0);
+  const [inspectionPenalty, setInspectionPenalty] = useState(null);
   const [scramble, setScramble] = useState(generateScramble());
   const [history, setHistory] = useState([]);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [cameraMessage, setCameraMessage] = useState('Starting camera...');
-  const [handsData, setHandsData] = useState(null); // Will store results from MediaPipe
+  const [handsData, setHandsData] = useState(null);
 
   const videoRef = useRef(null);
-  const timerRef = useRef(null);
-  const handsRef = useRef(null); // For MediaPipe Hands solution
+  const handsRef = useRef(null);
   const timerStatusRef = useRef(timerStatus);
-  const elapsedTimeRef = useRef(elapsedTime);
+  const inspectionStartRef = useRef(0);
+  const solveStartRef = useRef(0);
+  const holdTimeoutRef = useRef(null);
+  const rafRef = useRef(null);
   const scrambleRef = useRef(scramble);
+  const inspectionPenaltyRef = useRef(inspectionPenalty);
+  const handsDownRef = useRef(false);
 
   useEffect(() => {
     timerStatusRef.current = timerStatus;
   }, [timerStatus]);
 
   useEffect(() => {
-    elapsedTimeRef.current = elapsedTime;
-  }, [elapsedTime]);
-
-  useEffect(() => {
     scrambleRef.current = scramble;
   }, [scramble]);
 
-  // Format milliseconds to MM:SS.hh
+  useEffect(() => {
+    inspectionPenaltyRef.current = inspectionPenalty;
+  }, [inspectionPenalty]);
+
   const formatTime = (ms) => {
+    if (!Number.isFinite(ms)) return 'DNF';
     const totalSeconds = Math.floor(ms / 1000);
     const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
     const seconds = String(totalSeconds % 60).padStart(2, '0');
@@ -43,68 +50,200 @@ function SmartTimer() {
     return `${minutes}:${seconds}.${hundredths}`;
   };
 
+  const formatSolve = (record) => {
+    if (record.penalty === 'DNF') return 'DNF';
+    return `${formatTime(record.finalTime)}${record.penalty === '+2' ? ' +2' : ''}`;
+  };
+
+  const averageOf = (records, count) => {
+    const solves = records
+      .filter((record) => record.type === 'solve')
+      .slice(0, count);
+
+    if (solves.length < count || solves.some((record) => record.penalty === 'DNF')) {
+      return null;
+    }
+
+    const times = solves.map((record) => record.finalTime).sort((a, b) => a - b);
+    const trimmed = times.slice(1, -1);
+    const total = trimmed.reduce((sum, time) => sum + time, 0);
+    return total / trimmed.length;
+  };
+
+  const stats = useMemo(() => ({
+    ao5: averageOf(history, 5),
+    ao12: averageOf(history, 12),
+  }), [history]);
+
+  const clearHoldTimeout = () => {
+    clearTimeout(holdTimeoutRef.current);
+    holdTimeoutRef.current = null;
+  };
+
+  const stopAnimation = () => {
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+  };
+
   const setStatus = (status) => {
     timerStatusRef.current = status;
     setTimerStatus(status);
   };
 
-  const startTimer = () => {
-    if (timerStatusRef.current !== 'ready') return;
-
-    clearInterval(timerRef.current);
-    setStatus('running');
-    timerRef.current = setInterval(() => {
-      elapsedTimeRef.current += 10;
-      setElapsedTime(elapsedTimeRef.current);
-    }, 10);
+  const setPenalty = (penalty) => {
+    inspectionPenaltyRef.current = penalty;
+    setInspectionPenalty(penalty);
   };
 
-  const stopTimer = () => {
-    if (timerStatusRef.current !== 'running') return;
+  const addRecord = (record) => {
+    setHistory((prev) => [record, ...prev.slice(0, 19)]);
+  };
 
-    clearInterval(timerRef.current);
-    setStatus('stopped');
-    const newRecord = {
-      time: elapsedTimeRef.current,
-      scramble: scrambleRef.current,
-      date: new Date().toLocaleTimeString(),
+  const startInspection = () => {
+    clearHoldTimeout();
+    stopAnimation();
+    const startedAt = performance.now();
+    inspectionStartRef.current = startedAt;
+    setPenalty(null);
+    setInspectionElapsed(0);
+    setInspectionRemaining(INSPECTION_LIMIT_MS);
+    setDisplayTime(0);
+    setStatus('inspection');
+
+    const tickInspection = () => {
+      const elapsed = performance.now() - inspectionStartRef.current;
+      const remaining = Math.max(0, INSPECTION_LIMIT_MS - elapsed);
+      setInspectionElapsed(elapsed);
+      setInspectionRemaining(remaining);
+
+      if (elapsed >= INSPECTION_DNF_MS) {
+        stopAnimation();
+        setPenalty('DNF');
+        setStatus('stopped');
+        addRecord({
+          type: 'solve',
+          penalty: 'DNF',
+          time: null,
+          finalTime: null,
+          scramble: scrambleRef.current,
+          date: new Date().toLocaleTimeString(),
+        });
+        setScramble(generateScramble());
+        return;
+      }
+
+      rafRef.current = requestAnimationFrame(tickInspection);
     };
-    setHistory((prev) => [newRecord, ...prev.slice(0, 9)]); // Keep last 10
+
+    rafRef.current = requestAnimationFrame(tickInspection);
   };
 
-  const prepareTimer = () => {
-    if (timerStatusRef.current !== 'running') {
-      setStatus('ready');
+  const beginHoldToStart = () => {
+    if (timerStatusRef.current !== 'inspection') return;
+    clearHoldTimeout();
+    setStatus('holding');
+
+    holdTimeoutRef.current = setTimeout(() => {
+      if (timerStatusRef.current === 'holding') {
+        const elapsed = performance.now() - inspectionStartRef.current;
+        setPenalty(elapsed > INSPECTION_LIMIT_MS ? '+2' : null);
+        setStatus('ready');
+      }
+    }, HOLD_TO_START_MS);
+  };
+
+  const abortHoldToStart = () => {
+    clearHoldTimeout();
+    if (timerStatusRef.current === 'holding') {
+      setStatus('inspection');
     }
   };
 
-  // Reset timer
+  const startSolve = () => {
+    if (timerStatusRef.current !== 'ready') return;
+    clearHoldTimeout();
+    stopAnimation();
+
+    const inspectionTime = performance.now() - inspectionStartRef.current;
+    const penalty = inspectionTime > INSPECTION_LIMIT_MS ? '+2' : null;
+    setPenalty(penalty);
+    solveStartRef.current = performance.now();
+    setDisplayTime(0);
+    setStatus('running');
+
+    const tickSolve = () => {
+      setDisplayTime(performance.now() - solveStartRef.current);
+      rafRef.current = requestAnimationFrame(tickSolve);
+    };
+
+    rafRef.current = requestAnimationFrame(tickSolve);
+  };
+
+  const stopSolve = () => {
+    if (timerStatusRef.current !== 'running') return;
+    const endTime = performance.now();
+    const rawTime = endTime - solveStartRef.current;
+    const finalTime = rawTime + (inspectionPenaltyRef.current === '+2' ? 2000 : 0);
+
+    stopAnimation();
+    setDisplayTime(rawTime);
+    setStatus('stopped');
+    addRecord({
+      type: 'solve',
+      penalty: inspectionPenaltyRef.current,
+      time: rawTime,
+      finalTime,
+      scramble: scrambleRef.current,
+      date: new Date().toLocaleTimeString(),
+    });
+    setScramble(generateScramble());
+  };
+
   const resetTimer = () => {
-    clearInterval(timerRef.current);
+    clearHoldTimeout();
+    stopAnimation();
     setStatus('idle');
-    elapsedTimeRef.current = 0;
-    setElapsedTime(0);
+    setDisplayTime(0);
+    setInspectionElapsed(0);
+    setInspectionRemaining(INSPECTION_LIMIT_MS);
+    setPenalty(null);
     setScramble(generateScramble());
   };
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.code === 'Space' && timerStatusRef.current !== 'running') {
-        e.preventDefault();
-        prepareTimer();
-        return;
-      }
+      if (e.repeat) return;
 
       if (timerStatusRef.current === 'running') {
         e.preventDefault();
-        stopTimer();
+        stopSolve();
+        return;
+      }
+
+      if (e.code !== 'Space') return;
+      e.preventDefault();
+
+      if (timerStatusRef.current === 'inspection') {
+        beginHoldToStart();
       }
     };
 
     const handleKeyUp = (e) => {
-      if (e.code === 'Space' && timerStatusRef.current === 'ready') {
-        e.preventDefault();
-        startTimer();
+      if (e.code !== 'Space') return;
+      e.preventDefault();
+
+      if (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped') {
+        startInspection();
+        return;
+      }
+
+      if (timerStatusRef.current === 'holding') {
+        abortHoldToStart();
+        return;
+      }
+
+      if (timerStatusRef.current === 'ready') {
+        startSolve();
       }
     };
 
@@ -114,10 +253,11 @@ function SmartTimer() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      clearHoldTimeout();
+      stopAnimation();
     };
   }, []);
 
-  // MediaPipe Hands initialization and processing
   useEffect(() => {
     let animationFrameId;
     let stream;
@@ -133,11 +273,8 @@ function SmartTimer() {
       return undefined;
     }
 
-    // Initialize MediaPipe Hands
     const hands = new window.Hands({
-      locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-      },
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
     });
     hands.setOptions({
       maxNumHands: 2,
@@ -158,20 +295,18 @@ function SmartTimer() {
       animationFrameId = requestAnimationFrame(processFrame);
     };
 
-    // Start webcam
     const startCamera = async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
         videoRef.current.srcObject = stream;
         setIsCameraReady(true);
-        setCameraMessage('Camera ready. Put both hands in view, lift to start, return to stop.');
+        setCameraMessage('Camera ready. Tap space for inspection, or use hands after inspection starts.');
         videoRef.current.onloadedmetadata = () => {
           videoRef.current.play();
           processFrame();
         };
       } catch (err) {
-        console.error('Failed to access webcam:', err);
-        // Fallback to keyboard only
+        console.warn('Failed to access webcam:', err);
         setIsCameraReady(false);
         setCameraMessage('Camera not available. Use spacebar fallback.');
       }
@@ -179,7 +314,6 @@ function SmartTimer() {
 
     startCamera();
 
-    // Cleanup
     return () => {
       isMounted = false;
       cancelAnimationFrame(animationFrameId);
@@ -192,75 +326,84 @@ function SmartTimer() {
 
   const onResults = (results) => {
     setHandsData(results);
-    // Determine if both hands are flat
-    const leftHandFlat = isHandFlat(results, 'left');
-    const rightHandFlat = isHandFlat(results, 'right');
-    const bothHandsFlat = leftHandFlat && rightHandFlat;
-    const currentStatus = timerStatusRef.current;
+    const bothHandsFlat = isHandFlat(results, 'left') && isHandFlat(results, 'right');
+    const wasHandsDown = handsDownRef.current;
+    handsDownRef.current = bothHandsFlat;
 
-    // State transitions based on hand detection
-    if (currentStatus === 'idle' && bothHandsFlat) {
-      prepareTimer();
-    } else if (currentStatus === 'ready' && !bothHandsFlat) {
-      startTimer();
-    } else if (currentStatus === 'running' && bothHandsFlat) {
-      stopTimer();
+    if (!wasHandsDown && bothHandsFlat && timerStatusRef.current === 'inspection') {
+      beginHoldToStart();
+    } else if (wasHandsDown && !bothHandsFlat && timerStatusRef.current === 'holding') {
+      abortHoldToStart();
+    } else if (wasHandsDown && !bothHandsFlat && timerStatusRef.current === 'ready') {
+      startSolve();
+    } else if (!wasHandsDown && bothHandsFlat && timerStatusRef.current === 'running') {
+      stopSolve();
     }
   };
 
-  // Simple heuristic to determine if a hand is flat (all fingers extended)
-  // This is a placeholder and needs refinement based on actual landmark positions.
   const isHandFlat = (results, handedness) => {
     if (!results.multiHandLandmarks || !results.multiHandedness) return false;
 
-    // Find the hand of the specified handedness
-    let handIndex = -1;
-    results.multiHandedness.forEach((h, i) => {
-      if (h.label?.toLowerCase() === handedness) {
-        handIndex = i;
-      }
-    });
-
-    if (handIndex === -1) return false;
-
-    const landmarks = results.multiHandLandmarks[handIndex];
-
-    // We'll use a simple check: if the wrist is visible and the fingertips are roughly at the same y-level as the knuckles (or slightly below for flat on table)
-    // For simplicity, we'll consider the hand flat if the distance between wrist and middle finger tip is less than a threshold (indicating fingers are not curled)
-    // But note: when flat, the fingers are extended, so the tip should be further from the wrist? Actually, if the hand is flat on a table, the fingers are lying flat, so the tip and knuckle are at similar depth (z) but in x,y they might be spread.
-
-    // Given the complexity, we'll return true if the hand is detected (for now) and rely on spacebar for testing.
-    // TODO: Implement proper flat hand detection using landmark positions.
-    return true; // Placeholder: always true if hand detected
+    return results.multiHandedness.some((hand) => hand.label?.toLowerCase() === handedness);
   };
 
-  // Render
+  const displayLabel = () => {
+    if (timerStatus === 'inspection' || timerStatus === 'holding' || timerStatus === 'ready') {
+      return `${(inspectionRemaining / 1000).toFixed(2)}`;
+    }
+
+    if (timerStatus === 'stopped' && history[0]?.penalty === 'DNF') {
+      return 'DNF';
+    }
+
+    return formatTime(displayTime);
+  };
+
+  const statusClass = timerStatus === 'holding'
+    ? 'holding'
+    : timerStatus === 'ready'
+      ? 'ready'
+      : timerStatus === 'running'
+        ? 'running'
+        : 'stopped';
+
+  const statusText = {
+    idle: 'Tap Space to start 15-second inspection.',
+    inspection: 'Inspection running. Hold Space for 300ms to arm.',
+    holding: 'Hold steady...',
+    ready: 'Green. Release Space to start.',
+    running: 'Solving. Press any key to stop.',
+    stopped: 'Solve logged. Tap Space for the next inspection.',
+  }[timerStatus];
+
+  const warningText = inspectionElapsed >= 12000
+    ? '12 seconds'
+    : inspectionElapsed >= 8000
+      ? '8 seconds'
+      : '';
+
   return (
     <div className="max-w-xl mx-auto space-y-6">
-      {/* Scramble */}
-      <div className="text-center">
+      <div className="text-center space-y-3">
         <div className="scramble">{scramble}</div>
-        <button
-          onClick={() => {
-            setScramble(generateScramble());
-            if (timerStatus === 'idle' || timerStatus === 'ready') {
-              resetTimer();
-            }
-          }}
-          className="neon-button"
-        >
+        <button onClick={resetTimer} className="neon-button">
           <RefreshCw className="w-4 h-4 mr-2" /> New Scramble
         </button>
       </div>
 
-      {/* Timer Display */}
-      <div className="text-center">
-        <div className={`timer-display ${timerStatus === 'ready' ? 'ready' : timerStatus === 'running' ? 'running' : 'stopped'}`}>
-          {formatTime(elapsedTime)}
+      <div className="text-center space-y-2">
+        <div className={`timer-display ${statusClass}`}>
+          {displayLabel()}
         </div>
+        <div className="text-sm text-[var(--text-muted)]">{statusText}</div>
+        {warningText && (timerStatus === 'inspection' || timerStatus === 'holding' || timerStatus === 'ready') && (
+          <div className="text-sm font-semibold text-[var(--neon-green)]">{warningText}</div>
+        )}
+        {inspectionPenalty === '+2' && (
+          <div className="text-sm font-semibold text-yellow-300">+2 inspection penalty armed</div>
+        )}
       </div>
 
-      {/* Camera Feed */}
       {isCameraReady && (
         <div className="relative">
           <video
@@ -270,26 +413,26 @@ function SmartTimer() {
             playsInline
             className="w-full h-[300px] object-cover rounded-lg bg-black"
           />
-          {/* We could draw landmarks on a canvas here, but for simplicity we skip */}
         </div>
       )}
 
       <p className="text-[var(--text-muted)] text-center text-sm">{cameraMessage}</p>
 
-      {/* Controls */}
-      <div className="flex flex-col sm:flex-row sm:space-x-2 space-y-2 sm:space-y-0">
-        <button
-          onClick={resetTimer}
-          className="neon-button w-full sm:w-auto"
-        >
-          Reset
-        </button>
-        <p className="text-[var(--text-muted)] text-center text-sm">
-          Spacebar: hold to ready, release to start, press any key to stop.
-        </p>
+      <div className="grid grid-cols-2 gap-3 text-center">
+        <div className="bg-[var(--bg-darker)] rounded-md p-3 border border-[var(--neon-green)]/20">
+          <div className="text-xs text-[var(--text-muted)]">Ao5</div>
+          <div className="font-mono text-[var(--text-light)]">{stats.ao5 ? formatTime(stats.ao5) : '--'}</div>
+        </div>
+        <div className="bg-[var(--bg-darker)] rounded-md p-3 border border-[var(--neon-green)]/20">
+          <div className="text-xs text-[var(--text-muted)]">Ao12</div>
+          <div className="font-mono text-[var(--text-light)]">{stats.ao12 ? formatTime(stats.ao12) : '--'}</div>
+        </div>
       </div>
 
-      {/* History */}
+      <p className="text-[var(--text-muted)] text-center text-sm">
+        Keyboard: tap Space for inspection, hold Space until green, release to start, press any key to stop.
+      </p>
+
       {history.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold text-[var(--text-light)] mb-2">
@@ -297,9 +440,9 @@ function SmartTimer() {
           </h2>
           <div className="space-y-1">
             {history.map((record, index) => (
-              <div key={index} className="history-item">
-                <span>{formatTime(record.time)}</span>
-                <span className="text-[var(--text-muted)] text-xs">{record.scramble}</span>
+              <div key={`${record.date}-${index}`} className="history-item gap-3">
+                <span className="font-mono">{formatSolve(record)}</span>
+                <span className="text-[var(--text-muted)] text-xs truncate">{record.scramble}</span>
               </div>
             ))}
           </div>
