@@ -1,12 +1,13 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { generateScramble } from '../utils/scramble';
+import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
 
 const INSPECTION_LIMIT_MS = 15000;
 const INSPECTION_DNF_MS = 17000;
 const HOLD_TO_START_MS = 300;
 
-function SmartTimer() {
+function SmartTimer({ session }) {
   const [timerStatus, setTimerStatus] = useState('idle');
   const [displayTime, setDisplayTime] = useState(0);
   const [inspectionRemaining, setInspectionRemaining] = useState(INSPECTION_LIMIT_MS);
@@ -29,6 +30,8 @@ function SmartTimer() {
   const inspectionPenaltyRef = useRef(inspectionPenalty);
   const handsDownRef = useRef(false);
   const ignoreNextSpaceUpRef = useRef(false);
+  const userId = session?.user?.id;
+  const userIdRef = useRef(userId);
 
   useEffect(() => {
     timerStatusRef.current = timerStatus;
@@ -41,6 +44,10 @@ function SmartTimer() {
   useEffect(() => {
     inspectionPenaltyRef.current = inspectionPenalty;
   }, [inspectionPenalty]);
+
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
 
   const formatTime = (ms) => {
     if (!Number.isFinite(ms)) return 'DNF';
@@ -96,9 +103,88 @@ function SmartTimer() {
     setInspectionPenalty(penalty);
   };
 
-  const addRecord = (record) => {
-    setHistory((prev) => [record, ...prev.slice(0, 19)]);
+  const dbRowToRecord = (row) => ({
+    id: row.id,
+    type: row.type,
+    penalty: row.penalty,
+    time: row.raw_time_ms,
+    finalTime: row.final_time_ms,
+    scramble: row.scramble,
+    date: new Date(row.solved_at).toLocaleTimeString(),
+    solvedAt: row.solved_at,
+  });
+
+  const saveRecordToCloud = async (record) => {
+    if (!isSupabaseConfigured || !userIdRef.current) return;
+
+    const { data, error } = await supabase
+      .from('solves')
+      .insert({
+        user_id: userIdRef.current,
+        type: record.type,
+        raw_time_ms: Number.isFinite(record.time) ? Math.round(record.time) : null,
+        final_time_ms: Number.isFinite(record.finalTime) ? Math.round(record.finalTime) : null,
+        penalty: record.penalty,
+        scramble: record.scramble,
+        solved_at: record.solvedAt,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.warn('Unable to save solve:', error);
+      return;
+    }
+
+    setHistory((prev) => [
+      dbRowToRecord(data),
+      ...prev.filter((item) => item.localId !== record.localId),
+    ].slice(0, 20));
   };
+
+  const addRecord = (record) => {
+    const recordWithMeta = {
+      ...record,
+      localId: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+      solvedAt: new Date().toISOString(),
+    };
+
+    setHistory((prev) => [recordWithMeta, ...prev.slice(0, 19)]);
+    saveRecordToCloud(recordWithMeta);
+  };
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !userId) {
+      setHistory([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadSolves = async () => {
+      const { data, error } = await supabase
+        .from('solves')
+        .select('id, type, raw_time_ms, final_time_ms, penalty, scramble, solved_at')
+        .eq('user_id', userId)
+        .order('solved_at', { ascending: false })
+        .limit(20);
+
+      if (!isMounted) return;
+
+      if (error) {
+        console.warn('Unable to load solves:', error);
+        return;
+      }
+
+      setHistory(data.map(dbRowToRecord));
+    };
+
+    loadSolves();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userId]);
 
   const startInspection = () => {
     clearHoldTimeout();
@@ -209,6 +295,21 @@ function SmartTimer() {
     setInspectionRemaining(INSPECTION_LIMIT_MS);
     setPenalty(null);
     setScramble(generateScramble());
+  };
+
+  const clearSession = async () => {
+    setHistory([]);
+
+    if (!isSupabaseConfigured || !userIdRef.current) return;
+
+    const { error } = await supabase
+      .from('solves')
+      .delete()
+      .eq('user_id', userIdRef.current);
+
+    if (error) {
+      console.warn('Unable to clear solves:', error);
+    }
   };
 
   useEffect(() => {
@@ -441,6 +542,21 @@ function SmartTimer() {
       <p className="text-[var(--text-muted)] text-center text-sm">
         Keyboard: tap Space for inspection, hold Space until green, release to start, press any key to stop.
       </p>
+      <p className="text-[var(--text-muted)] text-center text-xs">
+        {isSupabaseConfigured
+          ? userId
+            ? 'Cloud sync is on for this account.'
+            : 'Log in above to save solves to the cloud.'
+          : 'Cloud sync is not configured yet.'}
+      </p>
+
+      {history.length > 0 && (
+        <div className="text-center">
+          <button type="button" onClick={clearSession} className="secondary-button">
+            Clear Session
+          </button>
+        </div>
+      )}
 
       {history.length > 0 && (
         <div>

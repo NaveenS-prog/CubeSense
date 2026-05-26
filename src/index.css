@@ -33,6 +33,37 @@ body {
   background-color: rgba(57, 255, 20, 0.9);
 }
 
+.secondary-button {
+  @apply relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-md border text-[var(--text-light)] bg-transparent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--neon-green)];
+  border-color: rgba(57, 255, 20, 0.25);
+}
+
+.secondary-button:hover {
+  border-color: rgba(57, 255, 20, 0.55);
+}
+
+.auth-panel {
+  @apply flex flex-col gap-3 rounded-md border bg-[var(--bg-darker)] p-4;
+  border-color: rgba(57, 255, 20, 0.2);
+}
+
+.auth-form {
+  @apply flex flex-col gap-2 sm:flex-row sm:items-center;
+}
+
+.auth-input {
+  @apply w-full rounded-md border bg-[var(--bg-dark)] px-3 py-2 text-sm text-[var(--text-light)] outline-none focus:ring-2 focus:ring-[var(--neon-green)] sm:w-auto;
+  border-color: rgba(57, 255, 20, 0.25);
+}
+
+.auth-input::placeholder {
+  color: var(--text-muted);
+}
+
+.auth-message {
+  @apply text-sm text-[var(--text-muted)];
+}
+
 /* Tab styles */
 .tab-button {
   @apply px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-light)] transition-colors border-b-2 border-transparent;
