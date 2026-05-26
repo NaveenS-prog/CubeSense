@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { LucideRotateCw } from 'lucide-react';
+import { RotateCw } from 'lucide-react';
+import { generateScramble } from '../utils/scramble';
 
 // We'll define some common OLL and PLL algorithms for 2-look
 // In a real app, this data might come from a JSON file or be more extensive
@@ -75,7 +76,7 @@ function AlgoTeacher() {
           onClick={() => setActiveTab('oll')}
           className={`tab-button ${activeTab === 'oll' ? 'active' : ''} px-4 py-2`}
         >
-          <LucideRotateCw className="w-4 h-4 mr-2" /> 2-Look OLL
+          <RotateCw className="w-4 h-4 mr-2" /> 2-Look OLL
         </button>
         <button
           onClick={() => setActiveTab('pll')}

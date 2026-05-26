@@ -12,11 +12,27 @@ function SmartTimer() {
   const [scramble, setScramble] = useState(generateScramble());
   const [history, setHistory] = useState([]);
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [cameraMessage, setCameraMessage] = useState('Starting camera...');
   const [handsData, setHandsData] = useState(null); // Will store results from MediaPipe
 
   const videoRef = useRef(null);
   const timerRef = useRef(null);
   const handsRef = useRef(null); // For MediaPipe Hands solution
+  const timerStatusRef = useRef(timerStatus);
+  const elapsedTimeRef = useRef(elapsedTime);
+  const scrambleRef = useRef(scramble);
+
+  useEffect(() => {
+    timerStatusRef.current = timerStatus;
+  }, [timerStatus]);
+
+  useEffect(() => {
+    elapsedTimeRef.current = elapsedTime;
+  }, [elapsedTime]);
+
+  useEffect(() => {
+    scrambleRef.current = scramble;
+  }, [scramble]);
 
   // Format milliseconds to MM:SS.hh
   const formatTime = (ms) => {
@@ -27,65 +43,98 @@ function SmartTimer() {
     return `${minutes}:${seconds}.${hundredths}`;
   };
 
-  // Start the timer
-  const startTimer = () => {
-    if (timerStatus === 'ready') {
-      setTimerStatus('running');
-      timerRef.current = setInterval(() => {
-        setElapsedTime((prev) => prev + 10);
-      }, 10);
-    }
+  const setStatus = (status) => {
+    timerStatusRef.current = status;
+    setTimerStatus(status);
   };
 
-  // Stop the timer
+  const startTimer = () => {
+    if (timerStatusRef.current !== 'ready') return;
+
+    clearInterval(timerRef.current);
+    setStatus('running');
+    timerRef.current = setInterval(() => {
+      elapsedTimeRef.current += 10;
+      setElapsedTime(elapsedTimeRef.current);
+    }, 10);
+  };
+
   const stopTimer = () => {
-    if (timerStatus === 'running') {
-      clearInterval(timerRef.current);
-      setTimerStatus('stopped');
-      // Save to history
-      const newRecord = {
-        time: elapsedTime,
-        scramble: scramble,
-        date: new Date().toLocaleTimeString(),
-      };
-      setHistory((prev) => [newRecord, ...prev.slice(0, 9)]); // Keep last 10
+    if (timerStatusRef.current !== 'running') return;
+
+    clearInterval(timerRef.current);
+    setStatus('stopped');
+    const newRecord = {
+      time: elapsedTimeRef.current,
+      scramble: scrambleRef.current,
+      date: new Date().toLocaleTimeString(),
+    };
+    setHistory((prev) => [newRecord, ...prev.slice(0, 9)]); // Keep last 10
+  };
+
+  const prepareTimer = () => {
+    if (timerStatusRef.current !== 'running') {
+      setStatus('ready');
     }
   };
 
   // Reset timer
   const resetTimer = () => {
     clearInterval(timerRef.current);
-    setTimerStatus('idle');
+    setStatus('idle');
+    elapsedTimeRef.current = 0;
     setElapsedTime(0);
     setScramble(generateScramble());
   };
 
-  // Spacebar fallback
-  const handleKeyDown = (e) => {
-    if (e.code === 'Space' && timerStatus !== 'running') {
-      e.preventDefault();
-      setTimerStatus('ready');
-    }
-  };
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.code === 'Space' && timerStatusRef.current !== 'running') {
+        e.preventDefault();
+        prepareTimer();
+        return;
+      }
 
-  const handleKeyUp = (e) => {
-    if (e.code === 'Space' && timerStatus === 'ready') {
-      e.preventDefault();
-      startTimer();
-    }
-  };
+      if (timerStatusRef.current === 'running') {
+        e.preventDefault();
+        stopTimer();
+      }
+    };
 
-  const handleKeyPress = (e) => {
-    if (timerStatus === 'running') {
-      // Any key stops the timer
-      stopTimer();
-    }
-  };
+    const handleKeyUp = (e) => {
+      if (e.code === 'Space' && timerStatusRef.current === 'ready') {
+        e.preventDefault();
+        startTimer();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
 
   // MediaPipe Hands initialization and processing
   useEffect(() => {
+    let animationFrameId;
+    let stream;
+    let isMounted = true;
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraMessage('Camera not available in this browser. Use spacebar fallback.');
+      return undefined;
+    }
+
+    if (!window.Hands) {
+      setCameraMessage('Hand detection library did not load. Use spacebar fallback.');
+      return undefined;
+    }
+
     // Initialize MediaPipe Hands
-    const hands = new Hands({
+    const hands = new window.Hands({
       locateFile: (file) => {
         return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
       },
@@ -99,16 +148,32 @@ function SmartTimer() {
     hands.onResults(onResults);
     handsRef.current = hands;
 
+    const processFrame = async () => {
+      if (!isMounted || !videoRef.current || !handsRef.current) return;
+
+      if (videoRef.current.readyState >= 2) {
+        await handsRef.current.send({ image: videoRef.current });
+      }
+
+      animationFrameId = requestAnimationFrame(processFrame);
+    };
+
     // Start webcam
     const startCamera = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
         videoRef.current.srcObject = stream;
         setIsCameraReady(true);
+        setCameraMessage('Camera ready. Put both hands in view, lift to start, return to stop.');
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play();
+          processFrame();
+        };
       } catch (err) {
         console.error('Failed to access webcam:', err);
         // Fallback to keyboard only
         setIsCameraReady(false);
+        setCameraMessage('Camera not available. Use spacebar fallback.');
       }
     };
 
@@ -116,9 +181,11 @@ function SmartTimer() {
 
     // Cleanup
     return () => {
-      handsRef.current.close();
-      if (videoRef.current.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+      isMounted = false;
+      cancelAnimationFrame(animationFrameId);
+      handsRef.current?.close();
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
       }
     };
   }, []);
@@ -129,13 +196,14 @@ function SmartTimer() {
     const leftHandFlat = isHandFlat(results, 'left');
     const rightHandFlat = isHandFlat(results, 'right');
     const bothHandsFlat = leftHandFlat && rightHandFlat;
+    const currentStatus = timerStatusRef.current;
 
     // State transitions based on hand detection
-    if (timerStatus === 'idle' && bothHandsFlat) {
-      setTimerStatus('ready');
-    } else if (timerStatus === 'ready' && !bothHandsFlat) {
+    if (currentStatus === 'idle' && bothHandsFlat) {
+      prepareTimer();
+    } else if (currentStatus === 'ready' && !bothHandsFlat) {
       startTimer();
-    } else if (timerStatus === 'running' && bothHandsFlat) {
+    } else if (currentStatus === 'running' && bothHandsFlat) {
       stopTimer();
     }
   };
@@ -148,7 +216,7 @@ function SmartTimer() {
     // Find the hand of the specified handedness
     let handIndex = -1;
     results.multiHandedness.forEach((h, i) => {
-      if (h.label === handedness) {
+      if (h.label?.toLowerCase() === handedness) {
         handIndex = i;
       }
     });
@@ -206,6 +274,8 @@ function SmartTimer() {
         </div>
       )}
 
+      <p className="text-[var(--text-muted)] text-center text-sm">{cameraMessage}</p>
+
       {/* Controls */}
       <div className="flex flex-col sm:flex-row sm:space-x-2 space-y-2 sm:space-y-0">
         <button
@@ -214,13 +284,9 @@ function SmartTimer() {
         >
           Reset
         </button>
-        {!isCameraReady && (
-          <div className="w-full sm:w-auto">
-            <p className="text-[var(--text-muted)] text-center">
-              Camera not available. Use spacebar fallback.
-            </p>
-          </div>
-        )}
+        <p className="text-[var(--text-muted)] text-center text-sm">
+          Spacebar: hold to ready, release to start, press any key to stop.
+        </p>
       </div>
 
       {/* History */}
