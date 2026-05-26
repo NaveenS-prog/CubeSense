@@ -88,27 +88,9 @@ function AuthPanel({ session, profile, onProfileSaved }) {
 
   if (session?.user) {
     return (
-      <div className="auth-panel">
-        <div>
-          <div className="text-sm text-[var(--text-muted)]">Signed in as</div>
-          <div className="font-semibold text-[var(--text-light)]">{profile?.username || session.user.email}</div>
-        </div>
-        <form onSubmit={handleProfileSave} className="auth-form">
-          <input
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            placeholder="Username"
-            className="auth-input"
-          />
-          <button type="submit" className="neon-button" disabled={isBusy}>
-            Save
-          </button>
-          <button type="button" onClick={handleSignOut} className="secondary-button" disabled={isBusy}>
-            <LogOut className="w-4 h-4 mr-2" /> Log out
-          </button>
-        </form>
-        {message && <div className="auth-message">{message}</div>}
-      </div>
+      <button type="button" onClick={handleSignOut} className="logout-button" disabled={isBusy}>
+        <LogOut className="w-4 h-4 mr-2" /> Log out
+      </button>
     );
   }
 

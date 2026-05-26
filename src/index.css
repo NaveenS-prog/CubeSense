@@ -42,6 +42,15 @@ body {
   border-color: rgba(57, 255, 20, 0.55);
 }
 
+.logout-button {
+  @apply inline-flex items-center rounded-md border bg-[var(--bg-darker)] px-3 py-2 text-sm font-medium text-[var(--text-light)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--neon-green)];
+  border-color: rgba(57, 255, 20, 0.35);
+}
+
+.logout-button:hover {
+  border-color: rgba(57, 255, 20, 0.7);
+}
+
 .auth-panel {
   @apply flex flex-col gap-3 rounded-md border bg-[var(--bg-darker)] p-4;
   border-color: rgba(57, 255, 20, 0.2);

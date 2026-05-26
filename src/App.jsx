@@ -99,7 +99,7 @@ function App() {
             </div>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto mb-6">
+          <div className="fixed bottom-4 left-4 z-50">
             <AuthPanel session={session} profile={profile} onProfileSaved={setProfile} />
           </div>
         )}
