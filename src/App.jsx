@@ -63,29 +63,33 @@ function App() {
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-[var(--neon-green)]/10">
         <h1 className="text-2xl font-bold text-[var(--neon-green)]">VibeTimer & CubeTeacher</h1>
-        <div className="flex space-x-2">
-          <button
-            className={`tab-button ${activeTab === 'timer' ? 'active' : ''}`}
-            onClick={() => setActiveTab('timer')}
-          >
-            Smart Timer
-          </button>
-          <button
-            className={`tab-button ${activeTab === 'teacher' ? 'active' : ''}`}
-            onClick={() => setActiveTab('teacher')}
-          >
-            Algo Teacher
-          </button>
-        </div>
+        {(!isSupabaseConfigured || session) && (
+          <div className="flex space-x-2">
+            <button
+              className={`tab-button ${activeTab === 'timer' ? 'active' : ''}`}
+              onClick={() => setActiveTab('timer')}
+            >
+              Smart Timer
+            </button>
+            <button
+              className={`tab-button ${activeTab === 'teacher' ? 'active' : ''}`}
+              onClick={() => setActiveTab('teacher')}
+            >
+              Algo Teacher
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Tab Content */}
       <main className="flex-1 p-6">
-        {isSupabaseConfigured ? (
-          <div className="max-w-4xl mx-auto mb-6">
-            <AuthPanel session={session} profile={profile} onProfileSaved={setProfile} />
+        {isSupabaseConfigured && !session ? (
+          <div className="min-h-[70vh] flex items-center justify-center">
+            <div className="w-full max-w-xl">
+              <AuthPanel session={session} profile={profile} onProfileSaved={setProfile} />
+            </div>
           </div>
-        ) : (
+        ) : !isSupabaseConfigured ? (
           <div className="max-w-4xl mx-auto mb-6 auth-panel">
             <div>
               <div className="text-sm text-[var(--text-muted)]">Cloud saves disabled</div>
@@ -94,17 +98,25 @@ function App() {
               </div>
             </div>
           </div>
+        ) : (
+          <div className="max-w-4xl mx-auto mb-6">
+            <AuthPanel session={session} profile={profile} onProfileSaved={setProfile} />
+          </div>
         )}
 
-        {activeTab === 'timer' && (
-          <section className="space-y-6">
-            <SmartTimer session={session} />
-          </section>
-        )}
-        {activeTab === 'teacher' && (
-          <section className="space-y-6">
-            <AlgoTeacher />
-          </section>
+        {(!isSupabaseConfigured || session) && (
+          <>
+            {activeTab === 'timer' && (
+              <section className="space-y-6">
+                <SmartTimer session={session} />
+              </section>
+            )}
+            {activeTab === 'teacher' && (
+              <section className="space-y-6">
+                <AlgoTeacher />
+              </section>
+            )}
+          </>
         )}
       </main>
     </div>
