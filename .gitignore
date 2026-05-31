@@ -4,3 +4,6 @@ dist/
 .env
 .env.*
 !.env.example
+node_modules - Copy/
+DONE.txt
+FINAL_SUMMARY.md
