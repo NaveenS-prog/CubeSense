@@ -1,5 +1,5 @@
 {
-  "name": "vibetimer_cubeteacher",
+  "name": "cubesense",
   "version": "1.0.0",
   "description": "A modern web app for speedcubing with camera-triggered timer and algorithm teacher",
   "main": "index.html",
@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/hands": "^0.4.1675469240",
     "@supabase/supabase-js": "^2.106.2",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",

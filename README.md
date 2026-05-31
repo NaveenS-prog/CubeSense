@@ -1,4 +1,4 @@
-# VibeTimer & CubeTeacher
+# CubeSense
 
 A modern web application for speedcubing featuring:
 - Camera-triggered cube timer using hand detection (MediaPipe Hands)

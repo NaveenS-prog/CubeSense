@@ -62,7 +62,7 @@ function App() {
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-[var(--neon-green)]/10">
-        <h1 className="text-2xl font-bold text-[var(--neon-green)]">VibeTimer & CubeTeacher</h1>
+        <h1 className="text-2xl font-bold text-[var(--neon-green)]">CubeSense</h1>
         {(!isSupabaseConfigured || session) && (
           <div className="flex space-x-2">
             <button

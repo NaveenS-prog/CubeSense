@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { generateScramble } from '../utils/scramble';
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
+import { areBothHandsDown, startHandCamera } from '../lib/mediapipeHands';
 
 const INSPECTION_LIMIT_MS = 15000;
 const INSPECTION_DNF_MS = 17000;
@@ -17,10 +18,9 @@ function SmartTimer({ session }) {
   const [history, setHistory] = useState([]);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [cameraMessage, setCameraMessage] = useState('Starting camera...');
-  const [handsData, setHandsData] = useState(null);
+  const [handsDetected, setHandsDetected] = useState(0);
 
   const videoRef = useRef(null);
-  const handsRef = useRef(null);
   const timerStatusRef = useRef(timerStatus);
   const inspectionStartRef = useRef(0);
   const solveStartRef = useRef(0);
@@ -30,6 +30,7 @@ function SmartTimer({ session }) {
   const inspectionPenaltyRef = useRef(inspectionPenalty);
   const handsDownRef = useRef(false);
   const ignoreNextSpaceUpRef = useRef(false);
+  const lastHandUiUpdateRef = useRef(0);
   const userId = session?.user?.id;
   const userIdRef = useRef(userId);
 
@@ -369,93 +370,67 @@ function SmartTimer({ session }) {
   }, []);
 
   useEffect(() => {
-    let animationFrameId;
-    let stream;
     let isMounted = true;
+    let stopCamera = null;
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraMessage('Camera not available in this browser. Use spacebar fallback.');
-      return undefined;
-    }
-
-    if (!window.Hands) {
-      setCameraMessage('Hand detection library did not load. Use spacebar fallback.');
-      return undefined;
-    }
-
-    const hands = new window.Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-    });
-    hands.setOptions({
-      maxNumHands: 2,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
-    hands.onResults(onResults);
-    handsRef.current = hands;
-
-    const processFrame = async () => {
-      if (!isMounted || !videoRef.current || !handsRef.current) return;
-
-      if (videoRef.current.readyState >= 2) {
-        await handsRef.current.send({ image: videoRef.current });
+    const handleHandResults = (results) => {
+      const count = results.multiHandLandmarks?.length ?? 0;
+      const now = performance.now();
+      if (now - lastHandUiUpdateRef.current > 200) {
+        lastHandUiUpdateRef.current = now;
+        setHandsDetected(count);
       }
 
-      animationFrameId = requestAnimationFrame(processFrame);
+      const bothHandsDown = areBothHandsDown(results);
+      const wasHandsDown = handsDownRef.current;
+      handsDownRef.current = bothHandsDown;
+
+      if (!wasHandsDown && bothHandsDown && timerStatusRef.current === 'inspection') {
+        beginHoldToStart();
+      } else if (wasHandsDown && !bothHandsDown && timerStatusRef.current === 'holding') {
+        abortHoldToStart();
+      } else if (wasHandsDown && !bothHandsDown && timerStatusRef.current === 'ready') {
+        startSolve();
+      } else if (!wasHandsDown && bothHandsDown && timerStatusRef.current === 'running') {
+        stopSolve();
+      }
     };
 
-    const startCamera = async () => {
+    const initCamera = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraMessage('Camera not available in this browser. Use spacebar fallback.');
+        return;
+      }
+
+      const video = videoRef.current;
+      if (!video) {
+        setCameraMessage('Camera preview failed to initialize.');
+        return;
+      }
+
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        videoRef.current.srcObject = stream;
+        stopCamera = await startHandCamera(video, handleHandResults);
+        if (!isMounted) {
+          stopCamera?.();
+          return;
+        }
         setIsCameraReady(true);
-        setCameraMessage('Camera ready. Tap space for inspection, or use hands after inspection starts.');
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play();
-          processFrame();
-        };
+        setCameraMessage('Camera ready. Space starts inspection; show both hands in frame to arm/start/stop.');
       } catch (err) {
-        console.warn('Failed to access webcam:', err);
+        console.warn('Camera / hand detection failed:', err);
+        if (!isMounted) return;
         setIsCameraReady(false);
-        setCameraMessage('Camera not available. Use spacebar fallback.');
+        setCameraMessage('Camera or hand detection failed. Allow camera access and reload, or use spacebar.');
       }
     };
 
-    startCamera();
+    initCamera();
 
     return () => {
       isMounted = false;
-      cancelAnimationFrame(animationFrameId);
-      handsRef.current?.close();
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+      stopCamera?.();
     };
   }, []);
-
-  const onResults = (results) => {
-    setHandsData(results);
-    const bothHandsFlat = isHandFlat(results, 'left') && isHandFlat(results, 'right');
-    const wasHandsDown = handsDownRef.current;
-    handsDownRef.current = bothHandsFlat;
-
-    if (!wasHandsDown && bothHandsFlat && timerStatusRef.current === 'inspection') {
-      beginHoldToStart();
-    } else if (wasHandsDown && !bothHandsFlat && timerStatusRef.current === 'holding') {
-      abortHoldToStart();
-    } else if (wasHandsDown && !bothHandsFlat && timerStatusRef.current === 'ready') {
-      startSolve();
-    } else if (!wasHandsDown && bothHandsFlat && timerStatusRef.current === 'running') {
-      stopSolve();
-    }
-  };
-
-  const isHandFlat = (results, handedness) => {
-    if (!results.multiHandLandmarks || !results.multiHandedness) return false;
-
-    return results.multiHandedness.some((hand) => hand.label?.toLowerCase() === handedness);
-  };
 
   const displayLabel = () => {
     if (timerStatus === 'inspection' || timerStatus === 'holding' || timerStatus === 'ready') {
@@ -514,17 +489,21 @@ function SmartTimer({ session }) {
         )}
       </div>
 
-      {isCameraReady && (
-        <div className="relative">
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="w-full h-[300px] object-cover rounded-lg bg-black"
-          />
-        </div>
-      )}
+      <div className="relative">
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="w-full h-[300px] object-cover rounded-lg bg-black"
+        />
+        {isCameraReady && (
+          <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/70 text-xs text-[var(--neon-green)]">
+            Hands detected: {handsDetected}/2
+            {handsDetected >= 2 ? ' — ready for gestures' : ''}
+          </div>
+        )}
+      </div>
 
       <p className="text-[var(--text-muted)] text-center text-sm">{cameraMessage}</p>
 
