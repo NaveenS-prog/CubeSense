@@ -17,10 +17,12 @@ function SmartTimer({ session }) {
   const [scramble, setScramble] = useState(generateScramble());
   const [history, setHistory] = useState([]);
   const [isCameraReady, setIsCameraReady] = useState(false);
-  const [cameraMessage, setCameraMessage] = useState('Starting camera...');
+  const [isCameraLoading, setIsCameraLoading] = useState(false);
+  const [cameraMessage, setCameraMessage] = useState('Click "Enable camera" to use hand gestures (required on deployed sites).');
   const [handsDetected, setHandsDetected] = useState(0);
 
   const videoRef = useRef(null);
+  const stopCameraRef = useRef(null);
   const timerStatusRef = useRef(timerStatus);
   const inspectionStartRef = useRef(0);
   const solveStartRef = useRef(0);
@@ -369,67 +371,64 @@ function SmartTimer({ session }) {
     };
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-    let stopCamera = null;
+  const handleHandResults = (results) => {
+    const count = results.multiHandLandmarks?.length ?? 0;
+    const now = performance.now();
+    if (now - lastHandUiUpdateRef.current > 200) {
+      lastHandUiUpdateRef.current = now;
+      setHandsDetected(count);
+    }
 
-    const handleHandResults = (results) => {
-      const count = results.multiHandLandmarks?.length ?? 0;
-      const now = performance.now();
-      if (now - lastHandUiUpdateRef.current > 200) {
-        lastHandUiUpdateRef.current = now;
-        setHandsDetected(count);
-      }
+    const bothHandsDown = areBothHandsDown(results);
+    const wasHandsDown = handsDownRef.current;
+    handsDownRef.current = bothHandsDown;
 
-      const bothHandsDown = areBothHandsDown(results);
-      const wasHandsDown = handsDownRef.current;
-      handsDownRef.current = bothHandsDown;
+    if (!wasHandsDown && bothHandsDown && timerStatusRef.current === 'inspection') {
+      beginHoldToStart();
+    } else if (wasHandsDown && !bothHandsDown && timerStatusRef.current === 'holding') {
+      abortHoldToStart();
+    } else if (wasHandsDown && !bothHandsDown && timerStatusRef.current === 'ready') {
+      startSolve();
+    } else if (!wasHandsDown && bothHandsDown && timerStatusRef.current === 'running') {
+      stopSolve();
+    }
+  };
 
-      if (!wasHandsDown && bothHandsDown && timerStatusRef.current === 'inspection') {
-        beginHoldToStart();
-      } else if (wasHandsDown && !bothHandsDown && timerStatusRef.current === 'holding') {
-        abortHoldToStart();
-      } else if (wasHandsDown && !bothHandsDown && timerStatusRef.current === 'ready') {
-        startSolve();
-      } else if (!wasHandsDown && bothHandsDown && timerStatusRef.current === 'running') {
-        stopSolve();
-      }
-    };
+  const enableCamera = async () => {
+    if (isCameraLoading || isCameraReady) return;
 
-    const initCamera = async () => {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraMessage('Camera not available in this browser. Use spacebar fallback.');
-        return;
-      }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraMessage('Camera not available in this browser. Use spacebar fallback.');
+      return;
+    }
 
-      const video = videoRef.current;
-      if (!video) {
-        setCameraMessage('Camera preview failed to initialize.');
-        return;
-      }
+    const video = videoRef.current;
+    if (!video) {
+      setCameraMessage('Camera preview failed to initialize.');
+      return;
+    }
 
-      try {
-        stopCamera = await startHandCamera(video, handleHandResults);
-        if (!isMounted) {
-          stopCamera?.();
-          return;
-        }
-        setIsCameraReady(true);
-        setCameraMessage('Camera ready. Space starts inspection; show both hands in frame to arm/start/stop.');
-      } catch (err) {
-        console.warn('Camera / hand detection failed:', err);
-        if (!isMounted) return;
-        setIsCameraReady(false);
-        setCameraMessage('Camera or hand detection failed. Allow camera access and reload, or use spacebar.');
-      }
-    };
+    setIsCameraLoading(true);
+    setCameraMessage('Loading hand detection and requesting camera access...');
 
-    initCamera();
+    try {
+      stopCameraRef.current?.();
+      stopCameraRef.current = await startHandCamera(video, handleHandResults);
+      setIsCameraReady(true);
+      setCameraMessage('Camera ready. Space starts inspection; show both hands in frame to arm/start/stop.');
+    } catch (err) {
+      console.warn('Camera / hand detection failed:', err);
+      setIsCameraReady(false);
+      const reason = err?.message || err?.name || 'Unknown error';
+      setCameraMessage(`Camera failed: ${reason}. Allow camera in browser settings, then try again. Spacebar still works.`);
+    } finally {
+      setIsCameraLoading(false);
+    }
+  };
 
-    return () => {
-      isMounted = false;
-      stopCamera?.();
-    };
+  useEffect(() => () => {
+    stopCameraRef.current?.();
+    stopCameraRef.current = null;
   }, []);
 
   const displayLabel = () => {
@@ -489,20 +488,33 @@ function SmartTimer({ session }) {
         )}
       </div>
 
-      <div className="relative">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="w-full h-[300px] object-cover rounded-lg bg-black"
-        />
-        {isCameraReady && (
+      <div className="space-y-3">
+        {!isCameraReady && (
+          <div className="text-center">
+            <button
+              type="button"
+              className="neon-button"
+              onClick={enableCamera}
+              disabled={isCameraLoading}
+            >
+              {isCameraLoading ? 'Enabling camera...' : 'Enable camera'}
+            </button>
+          </div>
+        )}
+
+        <div className={`relative ${isCameraReady ? '' : 'hidden'}`}>
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className="w-full h-[300px] object-cover rounded-lg bg-black"
+          />
           <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/70 text-xs text-[var(--neon-green)]">
             Hands detected: {handsDetected}/2
             {handsDetected >= 2 ? ' — ready for gestures' : ''}
           </div>
-        )}
+        </div>
       </div>
 
       <p className="text-[var(--text-muted)] text-center text-sm">{cameraMessage}</p>
