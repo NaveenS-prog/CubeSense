@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
 
+const LEGACY_SESSION_ID = 'legacy-default';
+
 function createSessionMeta(name) {
   return {
     id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
@@ -41,12 +43,29 @@ function dbRowToRecord(row) {
   };
 }
 
+function mergeSolvesByKey(cloudSolves, localSolves) {
+  const byKey = new Map();
+
+  [...localSolves, ...cloudSolves].forEach((solve) => {
+    const key = solve.id || solve.localId || `${solve.solvedAt}-${solve.finalTime}`;
+    const existing = byKey.get(key);
+    if (!existing || (solve.id && !existing.id)) {
+      byKey.set(key, solve);
+    }
+  });
+
+  return [...byKey.values()].sort(
+    (a, b) => new Date(b.solvedAt).getTime() - new Date(a.solvedAt).getTime(),
+  );
+}
+
 export function useTimerSessions(authSession) {
   const userId = authSession?.user?.id;
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [solves, setSolves] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [cloudSessionsEnabled, setCloudSessionsEnabled] = useState(false);
 
   const persistLocal = useCallback((nextSessions, nextActiveId, nextSolvesBySession) => {
     writeLocal(userId, {
@@ -56,24 +75,99 @@ export function useTimerSessions(authSession) {
     });
   }, [userId]);
 
+  const applySessionState = useCallback((nextSessions, nextActiveId, nextSolves, solvesBySession) => {
+    setSessions(nextSessions);
+    setActiveSessionId(nextActiveId);
+    setSolves(nextSolves);
+    persistLocal(nextSessions, nextActiveId, solvesBySession);
+  }, [persistLocal]);
+
   const loadFromLocal = useCallback(() => {
     const stored = readLocal(userId);
     if (stored?.sessions?.length) {
-      setSessions(stored.sessions);
-      setActiveSessionId(stored.activeSessionId || stored.sessions[0].id);
       const sid = stored.activeSessionId || stored.sessions[0].id;
-      setSolves(stored.solvesBySession?.[sid] || []);
+      applySessionState(
+        stored.sessions,
+        sid,
+        stored.solvesBySession?.[sid] || [],
+        stored.solvesBySession || {},
+      );
       return stored;
     }
 
     const initial = createSessionMeta('New Session');
     const empty = { [initial.id]: [] };
-    setSessions([initial]);
-    setActiveSessionId(initial.id);
-    setSolves([]);
-    persistLocal([initial], initial.id, empty);
+    applySessionState([initial], initial.id, [], empty);
     return { activeSessionId: initial.id, sessions: [initial], solvesBySession: empty };
-  }, [userId, persistLocal]);
+  }, [userId, applySessionState]);
+
+  const fetchCloudSolves = useCallback(async (sessionId, includeLegacy = true) => {
+    let query = supabase
+      .from('solves')
+      .select('id, type, raw_time_ms, final_time_ms, penalty, scramble, solved_at, session_id')
+      .eq('user_id', userId)
+      .order('solved_at', { ascending: false });
+
+    if (sessionId && includeLegacy) {
+      query = query.or(`session_id.eq.${sessionId},session_id.is.null`);
+    } else if (sessionId) {
+      query = query.eq('session_id', sessionId);
+    }
+
+    const { data, error } = await query;
+    return { data: (data || []).map(dbRowToRecord), error };
+  }, [userId]);
+
+  const backfillLegacySolves = useCallback(async (sessionId) => {
+    if (!isSupabaseConfigured || !userId || !sessionId || sessionId === LEGACY_SESSION_ID) return;
+
+    await supabase
+      .from('solves')
+      .update({ session_id: sessionId })
+      .eq('user_id', userId)
+      .is('session_id', null);
+  }, [userId]);
+
+  const uploadMissingLocalSolves = useCallback(async (sessionId, mergedSolves, withSessionId = false) => {
+    if (!isSupabaseConfigured || !userId) return mergedSolves;
+
+    const uploaded = await Promise.all(mergedSolves.map(async (solve) => {
+      if (solve.id) return solve;
+
+      const payload = {
+        user_id: userId,
+        type: solve.type,
+        raw_time_ms: Number.isFinite(solve.time) ? Math.round(solve.time) : null,
+        final_time_ms: Number.isFinite(solve.finalTime) ? Math.round(solve.finalTime) : null,
+        penalty: solve.penalty,
+        scramble: solve.scramble,
+        solved_at: solve.solvedAt || new Date().toISOString(),
+      };
+
+      if (withSessionId && sessionId && sessionId !== LEGACY_SESSION_ID) {
+        payload.session_id = sessionId;
+      }
+
+      let { data, error } = await supabase.from('solves').insert(payload).select().single();
+
+      if (error && payload.session_id) {
+        const fallback = { ...payload };
+        delete fallback.session_id;
+        ({ data, error } = await supabase.from('solves').insert(fallback).select().single());
+      }
+
+      if (error) {
+        console.warn('Unable to upload local solve:', error);
+        return solve;
+      }
+
+      return dbRowToRecord(data);
+    }));
+
+    return uploaded.sort(
+      (a, b) => new Date(b.solvedAt).getTime() - new Date(a.solvedAt).getTime(),
+    );
+  }, [userId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -88,6 +182,7 @@ export function useTimerSessions(authSession) {
       }
 
       const local = readLocal(userId);
+      const localSolvesForSession = local?.solvesBySession?.[local?.activeSessionId] || [];
 
       const { data: sessionRows, error: sessionError } = await supabase
         .from('timing_sessions')
@@ -98,11 +193,41 @@ export function useTimerSessions(authSession) {
       if (!isMounted) return;
 
       if (sessionError) {
-        console.warn('Sessions table unavailable, using local storage:', sessionError.message);
-        loadFromLocal();
-        setLoading(false);
+        console.warn('Sessions table unavailable, loading solves by user:', sessionError.message);
+        setCloudSessionsEnabled(false);
+
+        const legacySession = {
+          id: LEGACY_SESSION_ID,
+          name: 'All Solves',
+          createdAt: new Date().toISOString(),
+        };
+
+        const { data: allSolves, error: solveError } = await supabase
+          .from('solves')
+          .select('id, type, raw_time_ms, final_time_ms, penalty, scramble, solved_at, session_id')
+          .eq('user_id', userId)
+          .order('solved_at', { ascending: false });
+
+        if (solveError) {
+          console.warn('Unable to load cloud solves:', solveError);
+          loadFromLocal();
+          if (isMounted) setLoading(false);
+          return;
+        }
+
+        const cloudSolves = (allSolves || []).map(dbRowToRecord);
+        const merged = mergeSolvesByKey(cloudSolves, localSolvesForSession);
+        const synced = await uploadMissingLocalSolves(LEGACY_SESSION_ID, merged, false);
+        const solvesBySession = { [LEGACY_SESSION_ID]: synced };
+
+        if (isMounted) {
+          applySessionState([legacySession], LEGACY_SESSION_ID, synced, solvesBySession);
+          setLoading(false);
+        }
         return;
       }
+
+      setCloudSessionsEnabled(true);
 
       let nextSessions = sessionRows?.map((row) => ({
         id: row.id,
@@ -121,8 +246,10 @@ export function useTimerSessions(authSession) {
           .single();
 
         if (insertError) {
+          console.warn('Unable to create cloud session:', insertError);
+          setCloudSessionsEnabled(false);
           loadFromLocal();
-          setLoading(false);
+          if (isMounted) setLoading(false);
           return;
         }
 
@@ -138,27 +265,27 @@ export function useTimerSessions(authSession) {
         nextActiveId = nextSessions[0].id;
       }
 
-      const { data: solveRows, error: solveError } = await supabase
-        .from('solves')
-        .select('id, type, raw_time_ms, final_time_ms, penalty, scramble, solved_at, session_id')
-        .eq('user_id', userId)
-        .eq('session_id', nextActiveId)
-        .order('solved_at', { ascending: false });
+      await backfillLegacySolves(nextActiveId);
 
-      if (!isMounted) return;
+      const { data: cloudSolves, error: solveError } = await fetchCloudSolves(nextActiveId, true);
 
       if (solveError) {
         console.warn('Unable to load solves:', solveError);
       }
 
-      const loadedSolves = (solveRows || []).map(dbRowToRecord);
-      const solvesBySession = { ...(local?.solvesBySession || {}), [nextActiveId]: loadedSolves };
+      const localForActive = local?.solvesBySession?.[nextActiveId] || localSolvesForSession;
+      const merged = mergeSolvesByKey(cloudSolves || [], localForActive);
+      const synced = await uploadMissingLocalSolves(nextActiveId, merged, true);
 
-      setSessions(nextSessions);
-      setActiveSessionId(nextActiveId);
-      setSolves(loadedSolves);
-      persistLocal(nextSessions, nextActiveId, solvesBySession);
-      setLoading(false);
+      const solvesBySession = {
+        ...(local?.solvesBySession || {}),
+        [nextActiveId]: synced,
+      };
+
+      if (isMounted) {
+        applySessionState(nextSessions, nextActiveId, synced, solvesBySession);
+        setLoading(false);
+      }
     };
 
     load();
@@ -166,52 +293,75 @@ export function useTimerSessions(authSession) {
     return () => {
       isMounted = false;
     };
-  }, [userId, loadFromLocal, persistLocal]);
+  }, [
+    userId,
+    loadFromLocal,
+    applySessionState,
+    fetchCloudSolves,
+    backfillLegacySolves,
+    uploadMissingLocalSolves,
+  ]);
 
   const switchSession = useCallback(async (sessionId) => {
     if (sessionId === activeSessionId) return;
 
     const local = readLocal(userId) || { solvesBySession: {} };
 
-    if (local.solvesBySession?.[sessionId]) {
-      setActiveSessionId(sessionId);
-      setSolves(local.solvesBySession[sessionId]);
-      persistLocal(sessions, sessionId, local.solvesBySession);
+    if (local.solvesBySession?.[sessionId] && !isSupabaseConfigured) {
+      applySessionState(sessions, sessionId, local.solvesBySession[sessionId], local.solvesBySession);
       return;
     }
 
     if (isSupabaseConfigured && userId) {
-      const { data, error } = await supabase
-        .from('solves')
-        .select('id, type, raw_time_ms, final_time_ms, penalty, scramble, solved_at, session_id')
-        .eq('user_id', userId)
-        .eq('session_id', sessionId)
-        .order('solved_at', { ascending: false });
+      if (cloudSessionsEnabled && sessionId !== LEGACY_SESSION_ID) {
+        await backfillLegacySolves(sessionId);
+      }
+
+      const { data: cloudSolves, error } = await fetchCloudSolves(
+        sessionId === LEGACY_SESSION_ID ? null : sessionId,
+        sessionId !== LEGACY_SESSION_ID,
+      );
 
       if (error) {
         console.warn('Unable to load session solves:', error);
         return;
       }
 
-      const loaded = (data || []).map(dbRowToRecord);
-      const solvesBySession = { ...local.solvesBySession, [sessionId]: loaded };
-      setActiveSessionId(sessionId);
-      setSolves(loaded);
-      persistLocal(sessions, sessionId, solvesBySession);
+      const localForSession = local.solvesBySession?.[sessionId] || [];
+      const merged = mergeSolvesByKey(cloudSolves || [], localForSession);
+      const synced = await uploadMissingLocalSolves(
+        sessionId,
+        merged,
+        cloudSessionsEnabled && sessionId !== LEGACY_SESSION_ID,
+      );
+      const solvesBySession = { ...local.solvesBySession, [sessionId]: synced };
+      applySessionState(sessions, sessionId, synced, solvesBySession);
       return;
     }
 
-    setActiveSessionId(sessionId);
-    setSolves([]);
-    persistLocal(sessions, sessionId, { ...local.solvesBySession, [sessionId]: [] });
-  }, [activeSessionId, sessions, userId, persistLocal]);
+    applySessionState(
+      sessions,
+      sessionId,
+      local.solvesBySession?.[sessionId] || [],
+      { ...local.solvesBySession, [sessionId]: local.solvesBySession?.[sessionId] || [] },
+    );
+  }, [
+    activeSessionId,
+    sessions,
+    userId,
+    cloudSessionsEnabled,
+    applySessionState,
+    fetchCloudSolves,
+    backfillLegacySolves,
+    uploadMissingLocalSolves,
+  ]);
 
   const createSession = useCallback(async () => {
     const name = `Session ${sessions.length + 1}`;
     const meta = createSessionMeta(name);
     const nextSessions = [...sessions, meta];
 
-    if (isSupabaseConfigured && userId) {
+    if (isSupabaseConfigured && userId && cloudSessionsEnabled) {
       const { error } = await supabase
         .from('timing_sessions')
         .insert({ id: meta.id, user_id: userId, name: meta.name });
@@ -224,11 +374,8 @@ export function useTimerSessions(authSession) {
     const local = readLocal(userId) || { solvesBySession: {} };
     const solvesBySession = { ...local.solvesBySession, [meta.id]: [] };
 
-    setSessions(nextSessions);
-    setActiveSessionId(meta.id);
-    setSolves([]);
-    persistLocal(nextSessions, meta.id, solvesBySession);
-  }, [sessions, userId, persistLocal]);
+    applySessionState(nextSessions, meta.id, [], solvesBySession);
+  }, [sessions, userId, cloudSessionsEnabled, applySessionState]);
 
   const addSolve = useCallback(async (record) => {
     const recordWithMeta = {
@@ -248,13 +395,12 @@ export function useTimerSessions(authSession) {
       return next;
     });
 
-    if (!isSupabaseConfigured || !userId || !activeSessionId) {
+    if (!isSupabaseConfigured || !userId) {
       return recordWithMeta;
     }
 
     const insertPayload = {
       user_id: userId,
-      session_id: activeSessionId,
       type: record.type,
       raw_time_ms: Number.isFinite(record.time) ? Math.round(record.time) : null,
       final_time_ms: Number.isFinite(record.finalTime) ? Math.round(record.finalTime) : null,
@@ -263,14 +409,28 @@ export function useTimerSessions(authSession) {
       solved_at: recordWithMeta.solvedAt,
     };
 
-    const { data, error } = await supabase
+    if (cloudSessionsEnabled && activeSessionId && activeSessionId !== LEGACY_SESSION_ID) {
+      insertPayload.session_id = activeSessionId;
+    }
+
+    let { data, error } = await supabase
       .from('solves')
       .insert(insertPayload)
       .select()
       .single();
 
+    if (error && insertPayload.session_id) {
+      const fallbackPayload = { ...insertPayload };
+      delete fallbackPayload.session_id;
+      ({ data, error } = await supabase
+        .from('solves')
+        .insert(fallbackPayload)
+        .select()
+        .single());
+    }
+
     if (error) {
-      console.warn('Unable to save solve:', error);
+      console.warn('Unable to save solve to cloud:', error);
       return recordWithMeta;
     }
 
@@ -286,7 +446,7 @@ export function useTimerSessions(authSession) {
     });
 
     return saved;
-  }, [activeSessionId, sessions, userId, persistLocal]);
+  }, [activeSessionId, sessions, userId, cloudSessionsEnabled, persistLocal]);
 
   const deleteSolve = useCallback(async (record) => {
     const key = record.id || record.localId;
