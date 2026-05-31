@@ -188,6 +188,21 @@ function SmartTimer({ session }) {
     setScramble(generateScramble());
   };
 
+  /** Cancel inspection or discard an in-progress solve without logging. */
+  const hardStop = () => {
+    const status = timerStatusRef.current;
+    if (status === 'idle') return;
+
+    clearHoldTimeout();
+    stopAnimation();
+    handsDownRef.current = false;
+    setDisplayTime(0);
+    setInspectionElapsed(0);
+    setInspectionRemaining(INSPECTION_LIMIT_MS);
+    setPenalty(null);
+    setStatus('idle');
+  };
+
   const copyScramble = async () => {
     try {
       await navigator.clipboard.writeText(scramble);
@@ -197,8 +212,22 @@ function SmartTimer({ session }) {
   };
 
   useEffect(() => {
+    const isTypingTarget = (target) => {
+      const tag = target?.tagName?.toLowerCase();
+      return tag === 'input' || tag === 'textarea' || tag === 'select';
+    };
+
     const handleKeyDown = (e) => {
       if (e.repeat) return;
+      if (isTypingTarget(e.target)) return;
+
+      if (e.code === 'Escape') {
+        if (timerStatusRef.current !== 'idle') {
+          e.preventDefault();
+          hardStop();
+        }
+        return;
+      }
 
       if (timerStatusRef.current === 'running') {
         e.preventDefault();
@@ -321,10 +350,10 @@ function SmartTimer({ session }) {
 
   const statusText = {
     idle: 'Press space to start inspection',
-    inspection: 'Inspection on',
-    holding: 'Hold steady…',
-    ready: 'Release to start',
-    running: 'Solving',
+    inspection: 'Inspection on · Esc to cancel',
+    holding: 'Hold steady… · Esc to cancel',
+    ready: 'Release to start · Esc to cancel',
+    running: 'Solving · Esc to discard',
     stopped: 'Press space for next solve',
   }[timerStatus];
 
@@ -413,7 +442,7 @@ function SmartTimer({ session }) {
         )}
 
         <p className="timer-hint">
-          Space: inspect → hold → release to start → any key to stop
+          Space: inspect → hold → release to start → any key to stop · Esc: cancel / discard
           {activeSession ? ` · ${activeSession.name}` : ''}
         </p>
       </div>
