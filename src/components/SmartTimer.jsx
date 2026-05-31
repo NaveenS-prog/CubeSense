@@ -1,25 +1,39 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { RefreshCw } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { Copy, RefreshCw, Video } from 'lucide-react';
 import { generateScramble } from '../utils/scramble';
-import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
+import { formatTime } from '../utils/timerStats';
 import { areBothHandsDown, startHandCamera } from '../lib/mediapipeHands';
+import { useTimerSessions } from '../hooks/useTimerSessions';
+import SolveHistoryPanel from './layout/SolveHistoryPanel';
 
 const INSPECTION_LIMIT_MS = 15000;
 const INSPECTION_DNF_MS = 17000;
 const HOLD_TO_START_MS = 300;
 
 function SmartTimer({ session }) {
+  const {
+    sessions,
+    activeSession,
+    activeSessionId,
+    solves,
+    createSession,
+    switchSession,
+    addSolve,
+    deleteSolve,
+    updatePenalty,
+  } = useTimerSessions(session);
+
   const [timerStatus, setTimerStatus] = useState('idle');
   const [displayTime, setDisplayTime] = useState(0);
   const [inspectionRemaining, setInspectionRemaining] = useState(INSPECTION_LIMIT_MS);
   const [inspectionElapsed, setInspectionElapsed] = useState(0);
   const [inspectionPenalty, setInspectionPenalty] = useState(null);
   const [scramble, setScramble] = useState(generateScramble());
-  const [history, setHistory] = useState([]);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
-  const [cameraMessage, setCameraMessage] = useState('Click "Enable camera" to use hand gestures (required on deployed sites).');
+  const [cameraMessage, setCameraMessage] = useState('');
   const [handsDetected, setHandsDetected] = useState(0);
+  const [showCamera, setShowCamera] = useState(false);
 
   const videoRef = useRef(null);
   const stopCameraRef = useRef(null);
@@ -33,58 +47,10 @@ function SmartTimer({ session }) {
   const handsDownRef = useRef(false);
   const ignoreNextSpaceUpRef = useRef(false);
   const lastHandUiUpdateRef = useRef(0);
-  const userId = session?.user?.id;
-  const userIdRef = useRef(userId);
 
-  useEffect(() => {
-    timerStatusRef.current = timerStatus;
-  }, [timerStatus]);
-
-  useEffect(() => {
-    scrambleRef.current = scramble;
-  }, [scramble]);
-
-  useEffect(() => {
-    inspectionPenaltyRef.current = inspectionPenalty;
-  }, [inspectionPenalty]);
-
-  useEffect(() => {
-    userIdRef.current = userId;
-  }, [userId]);
-
-  const formatTime = (ms) => {
-    if (!Number.isFinite(ms)) return 'DNF';
-    const totalSeconds = Math.floor(ms / 1000);
-    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
-    const seconds = String(totalSeconds % 60).padStart(2, '0');
-    const hundredths = String(Math.floor((ms % 1000) / 10)).padStart(2, '0');
-    return `${minutes}:${seconds}.${hundredths}`;
-  };
-
-  const formatSolve = (record) => {
-    if (record.penalty === 'DNF') return 'DNF';
-    return `${formatTime(record.finalTime)}${record.penalty === '+2' ? ' +2' : ''}`;
-  };
-
-  const averageOf = (records, count) => {
-    const solves = records
-      .filter((record) => record.type === 'solve')
-      .slice(0, count);
-
-    if (solves.length < count || solves.some((record) => record.penalty === 'DNF')) {
-      return null;
-    }
-
-    const times = solves.map((record) => record.finalTime).sort((a, b) => a - b);
-    const trimmed = times.slice(1, -1);
-    const total = trimmed.reduce((sum, time) => sum + time, 0);
-    return total / trimmed.length;
-  };
-
-  const stats = useMemo(() => ({
-    ao5: averageOf(history, 5),
-    ao12: averageOf(history, 12),
-  }), [history]);
+  useEffect(() => { timerStatusRef.current = timerStatus; }, [timerStatus]);
+  useEffect(() => { scrambleRef.current = scramble; }, [scramble]);
+  useEffect(() => { inspectionPenaltyRef.current = inspectionPenalty; }, [inspectionPenalty]);
 
   const clearHoldTimeout = () => {
     clearTimeout(holdTimeoutRef.current);
@@ -106,88 +72,12 @@ function SmartTimer({ session }) {
     setInspectionPenalty(penalty);
   };
 
-  const dbRowToRecord = (row) => ({
-    id: row.id,
-    type: row.type,
-    penalty: row.penalty,
-    time: row.raw_time_ms,
-    finalTime: row.final_time_ms,
-    scramble: row.scramble,
-    date: new Date(row.solved_at).toLocaleTimeString(),
-    solvedAt: row.solved_at,
-  });
-
-  const saveRecordToCloud = async (record) => {
-    if (!isSupabaseConfigured || !userIdRef.current) return;
-
-    const { data, error } = await supabase
-      .from('solves')
-      .insert({
-        user_id: userIdRef.current,
-        type: record.type,
-        raw_time_ms: Number.isFinite(record.time) ? Math.round(record.time) : null,
-        final_time_ms: Number.isFinite(record.finalTime) ? Math.round(record.finalTime) : null,
-        penalty: record.penalty,
-        scramble: record.scramble,
-        solved_at: record.solvedAt,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.warn('Unable to save solve:', error);
-      return;
-    }
-
-    setHistory((prev) => [
-      dbRowToRecord(data),
-      ...prev.filter((item) => item.localId !== record.localId),
-    ].slice(0, 20));
-  };
-
-  const addRecord = (record) => {
-    const recordWithMeta = {
+  const recordSolve = (record) => {
+    addSolve({
       ...record,
-      localId: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
-      solvedAt: new Date().toISOString(),
-    };
-
-    setHistory((prev) => [recordWithMeta, ...prev.slice(0, 19)]);
-    saveRecordToCloud(recordWithMeta);
+      date: new Date().toLocaleTimeString(),
+    });
   };
-
-  useEffect(() => {
-    if (!isSupabaseConfigured || !userId) {
-      setHistory([]);
-      return;
-    }
-
-    let isMounted = true;
-
-    const loadSolves = async () => {
-      const { data, error } = await supabase
-        .from('solves')
-        .select('id, type, raw_time_ms, final_time_ms, penalty, scramble, solved_at')
-        .eq('user_id', userId)
-        .order('solved_at', { ascending: false })
-        .limit(20);
-
-      if (!isMounted) return;
-
-      if (error) {
-        console.warn('Unable to load solves:', error);
-        return;
-      }
-
-      setHistory(data.map(dbRowToRecord));
-    };
-
-    loadSolves();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [userId]);
 
   const startInspection = () => {
     clearHoldTimeout();
@@ -210,13 +100,12 @@ function SmartTimer({ session }) {
         stopAnimation();
         setPenalty('DNF');
         setStatus('stopped');
-        addRecord({
+        recordSolve({
           type: 'solve',
           penalty: 'DNF',
           time: null,
           finalTime: null,
           scramble: scrambleRef.current,
-          date: new Date().toLocaleTimeString(),
         });
         setScramble(generateScramble());
         return;
@@ -278,18 +167,17 @@ function SmartTimer({ session }) {
     stopAnimation();
     setDisplayTime(rawTime);
     setStatus('stopped');
-    addRecord({
+    recordSolve({
       type: 'solve',
       penalty: inspectionPenaltyRef.current,
       time: rawTime,
       finalTime,
       scramble: scrambleRef.current,
-      date: new Date().toLocaleTimeString(),
     });
     setScramble(generateScramble());
   };
 
-  const resetTimer = () => {
+  const resetScramble = () => {
     clearHoldTimeout();
     stopAnimation();
     setStatus('idle');
@@ -300,18 +188,11 @@ function SmartTimer({ session }) {
     setScramble(generateScramble());
   };
 
-  const clearSession = async () => {
-    setHistory([]);
-
-    if (!isSupabaseConfigured || !userIdRef.current) return;
-
-    const { error } = await supabase
-      .from('solves')
-      .delete()
-      .eq('user_id', userIdRef.current);
-
-    if (error) {
-      console.warn('Unable to clear solves:', error);
+  const copyScramble = async () => {
+    try {
+      await navigator.clipboard.writeText(scramble);
+    } catch {
+      // clipboard unavailable
     }
   };
 
@@ -321,19 +202,14 @@ function SmartTimer({ session }) {
 
       if (timerStatusRef.current === 'running') {
         e.preventDefault();
-        if (e.code === 'Space') {
-          ignoreNextSpaceUpRef.current = true;
-        }
+        if (e.code === 'Space') ignoreNextSpaceUpRef.current = true;
         stopSolve();
         return;
       }
 
       if (e.code !== 'Space') return;
       e.preventDefault();
-
-      if (timerStatusRef.current === 'inspection') {
-        beginHoldToStart();
-      }
+      if (timerStatusRef.current === 'inspection') beginHoldToStart();
     };
 
     const handleKeyUp = (e) => {
@@ -355,9 +231,7 @@ function SmartTimer({ session }) {
         return;
       }
 
-      if (timerStatusRef.current === 'ready') {
-        startSolve();
-      }
+      if (timerStatusRef.current === 'ready') startSolve();
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -398,29 +272,24 @@ function SmartTimer({ session }) {
     if (isCameraLoading || isCameraReady) return;
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraMessage('Camera not available in this browser. Use spacebar fallback.');
+      setCameraMessage('Camera not available. Use spacebar.');
       return;
     }
 
     const video = videoRef.current;
-    if (!video) {
-      setCameraMessage('Camera preview failed to initialize.');
-      return;
-    }
+    if (!video) return;
 
     setIsCameraLoading(true);
-    setCameraMessage('Loading hand detection and requesting camera access...');
+    setShowCamera(true);
 
     try {
       stopCameraRef.current?.();
       stopCameraRef.current = await startHandCamera(video, handleHandResults);
       setIsCameraReady(true);
-      setCameraMessage('Camera ready. Space starts inspection; show both hands in frame to arm/start/stop.');
+      setCameraMessage('Camera active — both hands in frame to arm/start/stop.');
     } catch (err) {
-      console.warn('Camera / hand detection failed:', err);
       setIsCameraReady(false);
-      const reason = err?.message || err?.name || 'Unknown error';
-      setCameraMessage(`Camera failed: ${reason}. Allow camera in browser settings, then try again. Spacebar still works.`);
+      setCameraMessage(err?.message || 'Camera failed. Allow access and retry.');
     } finally {
       setIsCameraLoading(false);
     }
@@ -435,12 +304,9 @@ function SmartTimer({ session }) {
     if (timerStatus === 'inspection' || timerStatus === 'holding' || timerStatus === 'ready') {
       return `${Math.ceil(inspectionRemaining / 1000)}`;
     }
-
-    if (timerStatus === 'stopped' && history[0]?.penalty === 'DNF') {
-      return 'DNF';
-    }
-
-    return formatTime(displayTime);
+    if (timerStatus === 'stopped' && solves[0]?.penalty === 'DNF') return 'DNF';
+    if (timerStatus === 'idle') return '0.00';
+    return formatTime(displayTime).slice(3);
   };
 
   const statusClass = timerStatus === 'holding'
@@ -449,15 +315,17 @@ function SmartTimer({ session }) {
       ? 'ready'
       : timerStatus === 'running'
         ? 'running'
-        : 'stopped';
+        : timerStatus === 'inspection'
+          ? 'inspection'
+          : 'stopped';
 
   const statusText = {
-    idle: 'Tap Space to start 15-second inspection.',
-    inspection: 'Inspection running. Hold Space for 300ms to arm.',
-    holding: 'Hold steady...',
-    ready: 'Green. Release Space to start.',
-    running: 'Solving. Press any key to stop.',
-    stopped: 'Solve logged. Tap Space for the next inspection.',
+    idle: 'Press space to start inspection',
+    inspection: 'Inspection on',
+    holding: 'Hold steady…',
+    ready: 'Release to start',
+    running: 'Solving',
+    stopped: 'Press space for next solve',
   }[timerStatus];
 
   const warningText = inspectionElapsed >= 12000
@@ -467,103 +335,94 @@ function SmartTimer({ session }) {
       : '';
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
-      <div className="text-center space-y-3">
-        <div className="scramble">{scramble}</div>
-        <button onClick={resetTimer} className="neon-button">
-          <RefreshCw className="w-4 h-4 mr-2" /> New Scramble
-        </button>
-      </div>
+    <div className="timer-layout">
+      <div className="timer-main">
+        <div className="timer-toolbar">
+          <select className="toolbar-select" defaultValue="3x3" disabled>
+            <option value="3x3">3x3</option>
+          </select>
 
-      <div className="text-center space-y-2">
-        <div className={`timer-display ${statusClass}`}>
-          {displayLabel()}
-        </div>
-        <div className="text-sm text-[var(--text-muted)]">{statusText}</div>
-        {warningText && (timerStatus === 'inspection' || timerStatus === 'holding' || timerStatus === 'ready') && (
-          <div className="text-sm font-semibold text-[var(--neon-green)]">{warningText}</div>
-        )}
-        {inspectionPenalty === '+2' && (
-          <div className="text-sm font-semibold text-yellow-300">+2 inspection penalty armed</div>
-        )}
-      </div>
-
-      <div className="space-y-3">
-        {!isCameraReady && (
-          <div className="text-center">
-            <button
-              type="button"
-              className="neon-button"
-              onClick={enableCamera}
-              disabled={isCameraLoading}
+          <div className="session-controls">
+            <select
+              className="toolbar-select session-select"
+              value={activeSessionId || ''}
+              onChange={(e) => switchSession(e.target.value)}
             >
-              {isCameraLoading ? 'Enabling camera...' : 'Enable camera'}
+              {sessions.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <button type="button" className="toolbar-btn" onClick={createSession}>
+              + New Session
             </button>
           </div>
+        </div>
+
+        <div className="scramble-block">
+          <div className="scramble scramble-large">{scramble}</div>
+          <div className="scramble-actions">
+            <button type="button" className="icon-btn" onClick={copyScramble} title="Copy scramble">
+              <Copy className="w-4 h-4" />
+            </button>
+            <button type="button" className="icon-btn" onClick={resetScramble} title="New scramble">
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            {!isCameraReady && (
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={enableCamera}
+                disabled={isCameraLoading}
+                title="Enable camera"
+              >
+                <Video className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="timer-center">
+          <div className={`timer-display-large ${statusClass}`}>{displayLabel()}</div>
+          <div className="timer-status-text">{statusText}</div>
+          {warningText && (timerStatus === 'inspection' || timerStatus === 'holding' || timerStatus === 'ready') && (
+            <div className="timer-warning">{warningText}</div>
+          )}
+          {inspectionPenalty === '+2' && (
+            <div className="timer-warning">+2 inspection penalty</div>
+          )}
+        </div>
+
+        {showCamera && (
+          <div className="camera-block">
+            <div className="relative">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                className="camera-video"
+              />
+              {isCameraReady && (
+                <div className="camera-badge">
+                  Hands: {handsDetected}/2
+                </div>
+              )}
+            </div>
+            {cameraMessage && <p className="camera-hint">{cameraMessage}</p>}
+          </div>
         )}
 
-        <div className={`relative ${isCameraReady ? '' : 'hidden'}`}>
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="w-full h-[300px] object-cover rounded-lg bg-black"
-          />
-          <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/70 text-xs text-[var(--neon-green)]">
-            Hands detected: {handsDetected}/2
-            {handsDetected >= 2 ? ' — ready for gestures' : ''}
-          </div>
-        </div>
+        <p className="timer-hint">
+          Space: inspect → hold → release to start → any key to stop
+          {activeSession ? ` · ${activeSession.name}` : ''}
+        </p>
       </div>
 
-      <p className="text-[var(--text-muted)] text-center text-sm">{cameraMessage}</p>
-
-      <div className="grid grid-cols-2 gap-3 text-center">
-        <div className="bg-[var(--bg-darker)] rounded-md p-3 border border-[var(--neon-green)]/20">
-          <div className="text-xs text-[var(--text-muted)]">Ao5</div>
-          <div className="font-mono text-[var(--text-light)]">{stats.ao5 ? formatTime(stats.ao5) : '--'}</div>
-        </div>
-        <div className="bg-[var(--bg-darker)] rounded-md p-3 border border-[var(--neon-green)]/20">
-          <div className="text-xs text-[var(--text-muted)]">Ao12</div>
-          <div className="font-mono text-[var(--text-light)]">{stats.ao12 ? formatTime(stats.ao12) : '--'}</div>
-        </div>
-      </div>
-
-      <p className="text-[var(--text-muted)] text-center text-sm">
-        Keyboard: tap Space for inspection, hold Space until green, release to start, press any key to stop.
-      </p>
-      <p className="text-[var(--text-muted)] text-center text-xs">
-        {isSupabaseConfigured
-          ? userId
-            ? 'Cloud sync is on for this account.'
-            : 'Log in above to save solves to the cloud.'
-          : 'Cloud sync is not configured yet.'}
-      </p>
-
-      {history.length > 0 && (
-        <div className="text-center">
-          <button type="button" onClick={clearSession} className="secondary-button">
-            Clear Session
-          </button>
-        </div>
-      )}
-
-      {history.length > 0 && (
-        <div>
-          <h2 className="text-lg font-semibold text-[var(--text-light)] mb-2">
-            Session History
-          </h2>
-          <div className="space-y-1">
-            {history.map((record, index) => (
-              <div key={`${record.date}-${index}`} className="history-item gap-3">
-                <span className="font-mono">{formatSolve(record)}</span>
-                <span className="text-[var(--text-muted)] text-xs truncate">{record.scramble}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <SolveHistoryPanel
+        solves={solves}
+        onDelete={deleteSolve}
+        onApplyPenalty={updatePenalty}
+      />
     </div>
   );
 }

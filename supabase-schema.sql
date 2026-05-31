@@ -53,3 +53,45 @@ using (auth.uid() = user_id);
 
 create index if not exists solves_user_solved_at_idx
 on public.solves (user_id, solved_at desc);
+
+-- Timing sessions (run this migration on existing Supabase projects)
+create table if not exists public.timing_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.timing_sessions enable row level security;
+
+drop policy if exists "Users can read their own timing sessions" on public.timing_sessions;
+create policy "Users can read their own timing sessions"
+on public.timing_sessions for select
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert their own timing sessions" on public.timing_sessions;
+create policy "Users can insert their own timing sessions"
+on public.timing_sessions for insert
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update their own timing sessions" on public.timing_sessions;
+create policy "Users can update their own timing sessions"
+on public.timing_sessions for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete their own timing sessions" on public.timing_sessions;
+create policy "Users can delete their own timing sessions"
+on public.timing_sessions for delete
+using (auth.uid() = user_id);
+
+alter table public.solves add column if not exists session_id uuid references public.timing_sessions(id) on delete cascade;
+
+drop policy if exists "Users can update their own solves" on public.solves;
+create policy "Users can update their own solves"
+on public.solves for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create index if not exists solves_session_solved_at_idx
+on public.solves (session_id, solved_at desc);
