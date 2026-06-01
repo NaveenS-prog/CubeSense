@@ -3,6 +3,7 @@ import SmartTimer from './components/SmartTimer';
 import AlgoTeacher from './components/AlgoTeacher';
 import AuthPanel from './components/AuthPanel';
 import Sidebar from './components/layout/Sidebar';
+import ResetPassword from './components/ResetPassword';
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient';
 
 function App() {
@@ -10,6 +11,10 @@ function App() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  if (window.location.pathname === '/reset-password') {
+    return <ResetPassword />;
+  }
 
   useEffect(() => {
     if (!isSupabaseConfigured) return undefined;
