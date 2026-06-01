@@ -1,9 +1,16 @@
-// Simple scramble generator for 3x3 cube
-// Generates a random sequence of moves (R, L, U, D, F, B) with possible modifiers (', 2)
-// Avoids repeating the same face consecutively and more than two same moves in a row.
+// Scramble generator for 3x3 cube
+// Rules:
+// 1. Same face cannot repeat consecutively (R R blocked)
+// 2. Same face cannot appear after its opposite face pair (R L R blocked)
 
 const moves = ['R', 'L', 'U', 'D', 'F', 'B'];
 const modifiers = ['', "'", '2'];
+
+const OPPOSITE = {
+  R: 'L', L: 'R',
+  U: 'D', D: 'U',
+  F: 'B', B: 'F',
+};
 
 /**
  * Generates a random scramble of specified length
@@ -12,24 +19,31 @@ const modifiers = ['', "'", '2'];
  */
 export function generateScramble(length = 20) {
   let scramble = [];
-  let lastMove = null;
-  let lastMoveFace = null;
+  let lastFace = null;
+  let secondLastFace = null;
 
   for (let i = 0; i < length; i++) {
-    let move;
     let face;
+    let move;
 
     do {
       face = moves[Math.floor(Math.random() * moves.length)];
-      move = face + modifiers[Math.floor(Math.random() * modifiers.length)];
-    } while (face === lastMoveFace ||
-             (i >= 2 &&
-              scramble[i-1].startsWith(face) &&
-              scramble[i-2].startsWith(face)));
 
+      // Rule 1: No same face twice in a row (R R blocked)
+      if (face === lastFace) continue;
+
+      // Rule 2: No same face after opposite pair (R L R blocked)
+      // only block if last two were opposite faces and current == secondLast
+      if (face === secondLastFace && OPPOSITE[lastFace] === secondLastFace) continue;
+
+      break;
+    } while (true);
+
+    move = face + modifiers[Math.floor(Math.random() * modifiers.length)];
     scramble.push(move);
-    lastMove = move;
-    lastMoveFace = face;
+
+    secondLastFace = lastFace;
+    lastFace = face;
   }
 
   return scramble.join(' ');
