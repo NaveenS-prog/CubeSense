@@ -286,10 +286,7 @@ function SmartTimer({ session }) {
     const wasHandsDown = handsDownRef.current;
     handsDownRef.current = bothHandsDown;
 
-    if (!wasHandsDown && bothHandsDown && (timerStatusRef.current === 'inspection' || timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped')) {
-      if (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped') {
-        startInspection();
-      }
+    if (!wasHandsDown && bothHandsDown && timerStatusRef.current === 'inspection') {
       beginHoldToStart();
     } else if (wasHandsDown && !bothHandsDown && timerStatusRef.current === 'holding') {
       abortHoldToStart();
