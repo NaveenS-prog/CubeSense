@@ -300,7 +300,7 @@ function SmartTimer({ session }) {
     }
   };
 
-  const enableCamera = async () => {
+  const enableCamera = () => {
     if (isCameraLoading || isCameraReady) return;
 
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -308,24 +308,44 @@ function SmartTimer({ session }) {
       return;
     }
 
-    const video = videoRef.current;
-    if (!video) return;
-
     setIsCameraLoading(true);
     setShowCamera(true);
-
-    try {
-      stopCameraRef.current?.();
-      stopCameraRef.current = await startHandCamera(video, handleHandResults);
-      setIsCameraReady(true);
-      setCameraMessage('Camera active — both hands in frame to arm/start/stop.');
-    } catch (err) {
-      setIsCameraReady(false);
-      setCameraMessage(err?.message || 'Camera failed. Allow access and retry.');
-    } finally {
-      setIsCameraLoading(false);
-    }
   };
+
+  useEffect(() => {
+    if (!showCamera) return undefined;
+
+    let isMounted = true;
+    const initCamera = async () => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      try {
+        stopCameraRef.current?.();
+        stopCameraRef.current = await startHandCamera(video, handleHandResults);
+        if (isMounted) {
+          setIsCameraReady(true);
+          setCameraMessage('Camera active — both hands in frame to arm/start/stop.');
+        }
+      } catch (err) {
+        if (isMounted) {
+          setIsCameraReady(false);
+          setCameraMessage(err?.message || 'Camera failed. Allow access and retry.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsCameraLoading(false);
+        }
+      }
+    };
+
+    const t = setTimeout(initCamera, 50);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(t);
+    };
+  }, [showCamera]);
 
   useEffect(() => () => {
     stopCameraRef.current?.();
