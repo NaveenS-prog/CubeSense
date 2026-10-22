@@ -72,56 +72,34 @@ function App() {
     }
   };
 
-  const showApp = !isSupabaseConfigured || session;
-
   return (
     <div className="app-shell">
-      {showApp && (
-        <Sidebar
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
-          profile={profile}
-          onSignOut={isSupabaseConfigured && session ? handleSignOut : null}
-        />
-      )}
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+        profile={profile}
+        onSignOut={isSupabaseConfigured && session ? handleSignOut : null}
+      />
 
       <div className="app-content">
-        {isSupabaseConfigured && !session ? (
-          <div className="auth-screen">
-            <div className="auth-screen-inner">
-              <h1 className="auth-screen-title">CubeSense</h1>
-              <p className="auth-screen-subtitle">Sign in to sync solves across devices</p>
-              <AuthPanel session={session} profile={profile} onProfileSaved={setProfile} />
-            </div>
+        {activeTab === 'timer' && (
+          <SmartTimer
+            session={session}
+            practiceCase={practiceCase}
+            onExitPractice={() => setPracticeCase(null)}
+          />
+        )}
+        {activeTab === 'teacher' && (
+          <div className="teacher-page">
+            <AlgoTeacher
+              onStartPractice={(caseObj) => {
+                setPracticeCase(caseObj);
+                setActiveTab('timer');
+              }}
+            />
           </div>
-        ) : (
-          <>
-            {!isSupabaseConfigured && (
-              <div className="cloud-banner">
-                Cloud sync disabled — add Supabase env vars to enable login and sync.
-              </div>
-            )}
-
-            {activeTab === 'timer' && (
-              <SmartTimer
-                session={session}
-                practiceCase={practiceCase}
-                onExitPractice={() => setPracticeCase(null)}
-              />
-            )}
-            {activeTab === 'teacher' && (
-              <div className="teacher-page">
-                <AlgoTeacher
-                  onStartPractice={(caseObj) => {
-                    setPracticeCase(caseObj);
-                    setActiveTab('timer');
-                  }}
-                />
-              </div>
-            )}
-          </>
         )}
       </div>
     </div>
