@@ -1,139 +1,213 @@
-import React, { useState } from 'react';
-import { RotateCw } from 'lucide-react';
-import { generateScramble } from '../utils/scramble';
+import React, { useState, useMemo } from 'react';
+import { Search, Play, Copy, Check, Sparkles, BookOpen } from 'lucide-react';
+import { OLL_CASES, PLL_CASES } from '../data/algorithms';
+import AlgoVisualizer from './AlgoVisualizer';
+import { invertAlgorithm } from '../utils/cubeSimulator';
 
-// We'll define some common OLL and PLL algorithms for 2-look
-// In a real app, this data might come from a JSON file or be more extensive
-const OLL_CASES = [
-  { name: 'Sune', notation: 'R U R\' U R U2 R\'', pattern: 'sune' },
-  { name: 'Antisune', notation: 'R U2 R\' U\' R U\' R\'', pattern: 'antisune' },
-  { name: 'Headlights', notation: 'R2 D R\' U2 R D\' R\' U2 R\'', pattern: 'headlights' },
-  { name: 'Superman', notation: 'R U2\' R2\' F R F\' U2\' R\' F R F\'', pattern: 'superman' },
-  { name: 'Hammerhead', notation: 'R\' F R F\' R\' U2 R U\' R\' U2 R', pattern: 'hammerhead' },
-  { name: 'Chameleon', notation: 'r U R\' U\' r\' F R F\'', pattern: 'chameleon' },
-  { name: 'Bowtie', notation: 'F\' r U R\' U\' r\' F R', pattern: 'bowtie' },
-  { name: 'Wheel', notation: 'R U2 R2\' F R F\' U2\' R\' F R F\'', pattern: 'wheel' },
-];
-
-const PLL_CASES = [
-  { name: 'T-Perm', notation: 'R U R\' U\' R\' F R2 U\' R\' U\' R U R\' F\'', pattern: 'tperm' },
-  { name: 'Y-Perm', notation: 'F R U\' R\' U\' R U R\' F\' R U R\' U\' R\' F R F\'', pattern: 'yperm' },
-  { name: 'U-Perm (a)', notation: 'R U\' R U R U R U\' R\' U\' R2', pattern: 'upmma' },
-  { name: 'U-Perm (b)', notation: 'R2 U R U R\' U\' R\' U\' R\' U R\'', pattern: 'upmmb' },
-  { name: 'Z-Perm', notation: 'M2 U M2 U M\' U2 M2 U2 M\' U2', pattern: 'zperm' },
-  { name: 'H-Perm', notation: 'M2 U M2 U2 M2 U M2', pattern: 'hperm' },
-  { name: 'E-Perm', notation: 'x\' R U\' R\' D R U R\' u2 R\' U R D R\' U\' R', pattern: 'eperm' },
-  { name: 'A-Perm (a)', notation: 'x R\' U R\' D2 R U\' R\' D2 R2', pattern: 'apmma' },
-  { name: 'A-Perm (b)', notation: 'x R2 D2 R U R\' D2 R U\' R\'', pattern: 'apmmb' },
-];
-
-// Helper function to generate a scramble that sets up a specific OLL/PLL case
-// This is a simplified version - in reality, you'd need a proper cube simulator
-// For demonstration, we'll just return a placeholder scramble
-const generateSetupScramble = (caseName) => {
-  // In a full implementation, this would use a cube library to generate a scramble
-  // that results in the given OLL/PLL case
-  // For now, we return a random scramble with a note
-  return `Setup for ${caseName}: ${generateScramble()}`;
-};
-
-function AlgoTeacher() {
-  const [activeTab, setActiveTab] = useState('oll'); // 'oll' or 'pll'
+export default function AlgoTeacher({ onStartPractice }) {
+  const [activeTab, setActiveTab] = useState('2look-oll'); // '2look-oll' | '2look-pll' | 'full-pll'
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedCase, setSelectedCase] = useState(null);
-  const [timerScramble, setTimerScramble] = useState(''); // To be sent to timer
+  const [copiedId, setCopiedId] = useState(null);
 
-  // In a real app, we would communicate with the timer component to reset and set scramble
-  // For simplicity, we'll just store the scramble in state and hope the timer can access it
-  // Better solution: use a state management library or pass callbacks up to parent
-  // Since we don't have that set up, we'll simulate by setting a global state or using an event
-  // We'll use a simple approach: when "Practice This" is clicked, we'll set a scramble
-  // and then we expect the timer to read it from somewhere (like localStorage or a context)
-  // For this demo, we'll just alert the scramble and note that in a real app it would be sent to the timer.
-
-  const handlePractice = (caseObj) => {
-    setSelectedCase(caseObj);
-    const setupScramble = generateSetupScramble(caseObj.name);
-    setTimerScramble(setupScramble);
-    // In a real app, we would:
-    // 1. Reset the timer
-    // 2. Set the scramble on the timer
-    // 3. Switch to the timer tab
-    // Since we can't directly access the timer component state, we'll use localStorage as a simple bridge
-    try {
-      localStorage.setItem('vibeTimerScramble', setupScramble);
-      localStorage.setItem('vibeTimerReset', 'true'); // Signal to reset
-    } catch (e) {
-      console.warn('Unable to use localStorage:', e);
+  // Compute cases for current tab
+  const cases = useMemo(() => {
+    let list = [];
+    if (activeTab === '2look-oll') {
+      list = OLL_CASES;
+    } else if (activeTab === '2look-pll') {
+      list = PLL_CASES.filter((c) => c.is2Look);
+    } else {
+      list = PLL_CASES;
     }
-    alert(`Setup scramble for ${caseObj.name}:\n${setupScramble}\n\nIn a full app, this would be sent to the timer and the timer would reset.`);
+
+    if (!searchQuery.trim()) return list;
+
+    const query = searchQuery.toLowerCase();
+    return list.filter(
+      (c) =>
+        c.name.toLowerCase().includes(query) ||
+        c.category.toLowerCase().includes(query) ||
+        c.notation.toLowerCase().includes(query)
+    );
+  }, [activeTab, searchQuery]);
+
+  const handleCopy = async (caseObj, e) => {
+    e?.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(caseObj.notation);
+      setCopiedId(caseObj.id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      // clipboard fallback
+    }
+  };
+
+  const handlePracticeClick = (caseObj, e) => {
+    e?.stopPropagation();
+    const setupScramble = invertAlgorithm(caseObj.notation);
+
+    if (onStartPractice) {
+      onStartPractice({
+        name: caseObj.name,
+        category: caseObj.category,
+        notation: caseObj.notation,
+        setupScramble,
+      });
+    } else {
+      setSelectedCase(caseObj);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Tabs */}
-      <div className="flex border-b border-[var(--neon-green)]/10 pb-2">
-        <button
-          onClick={() => setActiveTab('oll')}
-          className={`tab-button ${activeTab === 'oll' ? 'active' : ''} px-4 py-2`}
-        >
-          <RotateCw className="w-4 h-4 mr-2" /> 2-Look OLL
-        </button>
-        <button
-          onClick={() => setActiveTab('pll')}
-          className={`tab-button ${activeTab === 'pll' ? 'active' : ''} px-4 py-2`}
-        >
-          2-Look PLL
-        </button>
+    <div className="teacher-container">
+      {/* Header & Description */}
+      <div className="teacher-header">
+        <div>
+          <h1 className="teacher-title">Algorithm Trainer</h1>
+          <p className="teacher-subtitle">
+            Master CFOP Last Layer with visual diagrams, algorithms, and real inverted setup scrambles.
+          </p>
+        </div>
       </div>
 
-      {/* Algorithm List */}
-      <div className="space-y-4">
-        {(activeTab === 'oll' ? OLL_CASES : PLL_CASES).map((caseObj) => (
-          <div key={caseObj.name} className={`algo-card ${selectedCase === caseObj ? 'border-[var(--neon-green)]/40' : ''}`}>
-            <div className="flex items-start space-x-3">
-              {/* Algorithm SVG placeholder */}
-              <div className="algo-svg flex-shrink-0">
-                {/* In a real app, we would render an SVG representing the cube's top layer pattern */}
-                <div className="w-16 h-16 bg-[var(--bg-darker)] rounded flex items-center justify-center text-[var(--text-muted)] font-mono text-xs">
-                  {caseObj.pattern}
+      {/* Tabs and Search Bar */}
+      <div className="teacher-toolbar">
+        <div className="teacher-tabs">
+          <button
+            type="button"
+            className={`teacher-tab-btn ${activeTab === '2look-oll' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('2look-oll'); setSelectedCase(null); }}
+          >
+            2-Look OLL ({OLL_CASES.length})
+          </button>
+          <button
+            type="button"
+            className={`teacher-tab-btn ${activeTab === '2look-pll' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('2look-pll'); setSelectedCase(null); }}
+          >
+            2-Look PLL (6)
+          </button>
+          <button
+            type="button"
+            className={`teacher-tab-btn ${activeTab === 'full-pll' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('full-pll'); setSelectedCase(null); }}
+          >
+            Full PLL (21)
+          </button>
+        </div>
+
+        <div className="teacher-search">
+          <Search className="w-4 h-4 text-[var(--text-muted)] ml-2.5" />
+          <input
+            type="text"
+            placeholder="Search algorithms..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="teacher-search-input"
+          />
+        </div>
+      </div>
+
+      {/* Algorithm Grid */}
+      <div className="algo-grid">
+        {cases.map((caseObj) => {
+          const isSelected = selectedCase?.id === caseObj.id;
+          const isCopied = copiedId === caseObj.id;
+
+          return (
+            <div
+              key={caseObj.id}
+              className={`algo-card-enhanced ${isSelected ? 'selected' : ''}`}
+              onClick={() => setSelectedCase(caseObj)}
+            >
+              <div className="algo-card-header">
+                <span className="algo-badge">{caseObj.category}</span>
+                <button
+                  type="button"
+                  className="algo-icon-btn"
+                  onClick={(e) => handleCopy(caseObj, e)}
+                  title="Copy algorithm"
+                >
+                  {isCopied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              <div className="algo-visualizer-wrap">
+                <AlgoVisualizer caseObj={caseObj} size={84} />
+              </div>
+
+              <div className="algo-info">
+                <div className="algo-name-title">{caseObj.name}</div>
+                <div className="algo-formula" title={caseObj.notation}>
+                  {caseObj.notation}
                 </div>
               </div>
-              <div>
-                <div className="algo-name">{caseObj.name}</div>
-                <div className="algo-notation">{caseObj.notation}</div>
+
+              <button
+                type="button"
+                className="algo-practice-btn"
+                onClick={(e) => handlePracticeClick(caseObj, e)}
+              >
+                <Play className="w-3.5 h-3.5 fill-current mr-1.5" /> Practice on Timer
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Selected Case Detail Modal / Panel */}
+      {selectedCase && (
+        <div className="selected-case-panel">
+          <div className="selected-case-content">
+            <div className="selected-case-visual">
+              <AlgoVisualizer caseObj={selectedCase} size={110} />
+            </div>
+
+            <div className="selected-case-details">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white">{selectedCase.name}</h2>
+                <span className="algo-badge">{selectedCase.category}</span>
+              </div>
+
+              <div className="mt-3">
+                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1">
+                  Algorithm
+                </div>
+                <div className="selected-case-notation font-mono text-base text-[var(--solve-green)] bg-[var(--bg-app)] p-2.5 rounded border border-[var(--border-subtle)]">
+                  {selectedCase.notation}
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1">
+                  Setup Scramble (from solved cube)
+                </div>
+                <div className="font-mono text-xs text-[var(--text-light)] bg-[var(--bg-app)] p-2 rounded border border-[var(--border-subtle)]">
+                  {invertAlgorithm(selectedCase.notation)}
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
                 <button
-                  onClick={() => handlePractice(caseObj)}
-                  className="practice-button"
+                  type="button"
+                  className="toolbar-btn flex items-center justify-center gap-2 flex-1"
+                  onClick={() => handlePracticeClick(selectedCase)}
                 >
-                  Practice This
+                  <Play className="w-4 h-4 fill-current" /> Practice This Case on Timer
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setSelectedCase(null)}
+                >
+                  Close
                 </button>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Selected Case Detail */}
-      {selectedCase && (
-        <div className="bg-[var(--bg-darker)] rounded-lg p-4 border border-[var(--neon-green)]/20">
-          <h3 className="text-lg font-semibold text-[var(--neon-green)] mb-2">
-            {selectedCase.name}
-          </h3>
-          <div className="text-[var(--text-muted)] mb-2">
-            Notation: <code className="font-mono">{selectedCase.notation}</code>
-          </div>
-          <div className="text-sm text-[var(--text-light)]">
-            <p>To practice this case:</p>
-            <ol className="list-decimal pl-5 space-y-1">
-              <li>Apply the scramble: <code className="bg-[var(--bg-darker)] px-1 py-0.5 rounded">{timerScramble}</code></li>
-              <li>Solve the cube using the algorithm above</li>
-              <li>Use the Smart Timer to time your solution</li>
-            </ol>
           </div>
         </div>
       )}
     </div>
   );
 }
-
-export default AlgoTeacher;

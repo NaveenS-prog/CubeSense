@@ -1,39 +1,110 @@
 # CubeSense
 
-A modern web application for speedcubing featuring:
-- Camera-triggered cube timer using hand detection (MediaPipe Hands)
-- Interactive algorithm teacher for OLL/PLL practice
+A modern, high-performance speedcubing web application featuring a computer-vision camera Stackmat timer, WCA-compliant inspection and statistics, interactive 2D scramble verification, and an intelligent CFOP algorithm trainer.
 
-## Features
+![CubeSense Speedcubing Platform](https://raw.githubusercontent.com/NaveenS-prog/CubeSense/main/public/vite.svg)
 
-### Smart Timer
-- Starts when both hands lift from flat position (ready state detected when both hands flat)
-- Stops when both hands return to flat position
-- Keyboard fallback: Spacebar down = ready, release = start, any key = stop
-- Random scramble generator
-- Session history
+---
 
-### Algo Teacher
-- 2-Look OLL and PLL algorithms
-- Visual representation of each case
-- Practice button that generates setup scrambles
-- Integration with timer for timed practice
+## Key Features
+
+### 1. Vision Stackmat Timer (MediaPipe Hands)
+- **Computer-Vision Palm Detection**: True 21-landmark geometric analysis to detect palms resting flat on the desk vs holding a cube or gesturing in the air.
+- **Dual Virtual Sensor Pads**: Distinct Left Touchpad and Right Touchpad monitoring with real-time HUD canvas overlay and neon status indicators.
+- **WCA State Machine**:
+  - `Idle` → `Inspection` (15s WCA countdown with 8s and 12s audible alerts)
+  - `Holding` (300ms countdown when both hands rest on pads or spacebar is held)
+  - `Ready` (Glowing neon green armed state)
+  - `Running` (Starts the millisecond hands lift off pads or spacebar is released)
+  - `Stopped` (Stops the millisecond hands touch pads or any key is pressed)
+- **Touchscreen & Keyboard Fallback**: Full spacebar control or on-screen touchpads for phones and tablets.
+
+### 2. Audio Synthesizer (Web Audio API)
+- Zero external audio files (100% offline-ready, no network latency).
+- WCA 8-second inspection alert ("8 seconds").
+- WCA 12-second inspection warning ("12 seconds").
+- Ready armed chime, start pop, stop tone, and triumphant Personal Best (PB) fanfare!
+- One-click mute/unmute control.
+
+### 3. Interactive Scramble Verification & Multi-Event
+- **WCA Scramble Generator**: Supports 3x3x3, 2x2x2, 4x4x4, and 3x3 One-Handed (OH) with cancellation protection (no consecutive or opposite face cancellation).
+- **2D Unfolded Cube Net**: Real-time 3x3 Rubik's cube state simulator rendering an unfolded 6-face SVG net (U, L, F, R, B, D) to verify scrambles before starting inspection.
+
+### 4. CFOP Algorithm Trainer (Algo Teacher)
+- **Comprehensive Library**:
+  - **2-Look OLL** (Edge orientation cross cases & corner orientation cases)
+  - **2-Look PLL** (Corner swaps & edge permutations)
+  - **Full PLL** (All 21 standard WCA permutation cases: T, Y, Ua, Ub, H, Z, J, R, F, V, E, A, G, N perms)
+- **Dynamic SVG Visualizers**:
+  - OLL: Top-down yellow facelets with side orientation bars.
+  - PLL: Permutation cycle arrows and swap vectors.
+- **True Inverted Setup Scrambles**: Mathematically inverts the algorithm so applying the setup scramble on a solved cube recreates the exact case!
+- **Direct Practice Mode**: Practice any algorithm on the Smart Timer with live algorithm prompts and dedicated practice tagging.
+
+### 5. WCA Regulations Statistics & Solve Analytics
+- **Accurate WCA Ao5 / Ao12 Trimming**: Properly drops the best and worst times (counting single DNF as worst time, and failing to DNF average only when ≥ 2 DNFs occur).
+- **Session Intelligence**: Real-time tracking of PB (Best Single), Worst Single, Session Mean, Current Ao5, Best Ao5, Current Ao12, and Best Ao12.
+- **Interactive Solve Detail Modal**: Click any solve to review exact timestamps, raw vs penalty time, 2D scramble preview net, re-scramble trigger, and +2/DNF management.
+- **Session Progress Chart**: SVG sparkline trend graph showing solve progression over time.
+- **Data Portability**: 1-click export of session solves to JSON or CSV format.
+- **Optional Cloud Sync**: Sync sessions and solves across devices with Supabase authentication.
+
+---
 
 ## Tech Stack
-- React 18
-- Vite
-- Tailwind CSS
-- MediaPipe Hands (via CDN)
-- Lucide React (icons)
 
-## Setup
+- **Frontend**: React 18, Vite
+- **Styling**: Tailwind CSS, custom speedcubing neon design system
+- **Computer Vision**: MediaPipe Hands (via CDN)
+- **Audio**: Web Audio API (native oscillator synthesis)
+- **Icons**: Lucide React
+- **Cloud Backend (Optional)**: Supabase (Auth, PostgreSQL database, RLS policies)
+
+---
+
+## Getting Started
+
+### Prerequisites
+- Node.js (v18+ recommended)
+- npm or yarn
+
+### Installation
 ```bash
+# Clone the repository
+git clone https://github.com/NaveenS-prog/CubeSense.git
+cd CubeSense
+
+# Install dependencies
 npm install
+
+# Start the development server
 npm run dev
 ```
 
-## Implementation Notes
-- The hand detection uses MediaPipe Hands solution from CDN
-- For simplicity in this prototype, the flat hand detection always returns true when hands are detected
-- In a production version, proper landmark analysis would be implemented to detect actual flat hand positions
-- The algorithm teacher uses placeholder SVGs; in a full implementation these would be proper cube face representations
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+### Building for Production
+```bash
+npm run build
+npm run preview
+```
+
+---
+
+## Cloud Sync Setup (Optional)
+
+To enable cross-device cloud sync with Supabase:
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Execute the schema in [`supabase-schema.sql`](./supabase-schema.sql) in the Supabase SQL Editor.
+3. Create a `.env` file in the root directory:
+```env
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+4. Restart your development server. Solves and timing sessions will automatically synchronize!
+
+---
+
+## License
+
+MIT License. Crafted for the speedcubing community.

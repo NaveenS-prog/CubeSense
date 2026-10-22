@@ -1,16 +1,45 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { Copy, RefreshCw, Video } from 'lucide-react';
-import { generateScramble } from '../utils/scramble';
-import { formatTime } from '../utils/timerStats';
-import { areBothHandsDown, startHandCamera } from '../lib/mediapipeHands';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import {
+  Copy,
+  RefreshCw,
+  Video,
+  VideoOff,
+  Volume2,
+  VolumeX,
+  Eye,
+  EyeOff,
+  Check,
+  Maximize2,
+  Minimize2,
+  X,
+  Settings,
+} from 'lucide-react';
+import { generateScramble, CUBE_EVENTS } from '../utils/scramble';
+import { formatTime, computeStats } from '../utils/timerStats';
+import {
+  analyzeStackmatHands,
+  drawStackmatCanvas,
+  startHandCamera,
+} from '../lib/mediapipeHands';
+import {
+  playWarning8s,
+  playWarning12s,
+  playReadySound,
+  playStartSound,
+  playStopSound,
+  playPbSound,
+  isSoundEnabled,
+  setSoundEnabled,
+} from '../utils/soundEffects';
 import { useTimerSessions } from '../hooks/useTimerSessions';
 import SolveHistoryPanel from './layout/SolveHistoryPanel';
+import CubeNetVisualizer from './CubeNetVisualizer';
 
 const INSPECTION_LIMIT_MS = 15000;
 const INSPECTION_DNF_MS = 17000;
 const HOLD_TO_START_MS = 300;
 
-function SmartTimer({ session }) {
+function SmartTimer({ session, practiceCase, onExitPractice }) {
   const {
     sessions,
     activeSession,
@@ -21,21 +50,45 @@ function SmartTimer({ session }) {
     addSolve,
     deleteSolve,
     updatePenalty,
+    clearCurrentSession,
+    renameSession,
   } = useTimerSessions(session);
 
-  const [timerStatus, setTimerStatus] = useState('idle');
+  // Core timer state
+  const [timerStatus, setTimerStatus] = useState('idle'); // idle, inspection, holding, ready, running, stopped
   const [displayTime, setDisplayTime] = useState(0);
+  const [selectedEvent, setSelectedEvent] = useState('3x3');
+  const [scramble, setScramble] = useState(() =>
+    practiceCase ? practiceCase.setupScramble : generateScramble('3x3')
+  );
+
+  // Inspection states
   const [inspectionRemaining, setInspectionRemaining] = useState(INSPECTION_LIMIT_MS);
   const [inspectionElapsed, setInspectionElapsed] = useState(0);
   const [inspectionPenalty, setInspectionPenalty] = useState(null);
-  const [scramble, setScramble] = useState(generateScramble());
+
+  // Settings & Toggles
+  const [useInspection, setUseInspection] = useState(true);
+  const [soundActive, setSoundActive] = useState(() => isSoundEnabled());
+  const [showVisualizer, setShowVisualizer] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [showTouchpads, setShowTouchpads] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [copiedScramble, setCopiedScramble] = useState(false);
+
+  // Camera & Stackmat states
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [cameraMessage, setCameraMessage] = useState('');
-  const [handsDetected, setHandsDetected] = useState(0);
-  const [showCamera, setShowCamera] = useState(false);
+  const [stackmatAnalysis, setStackmatAnalysis] = useState(null);
 
+  // Touchpad states (manual touch on screen)
+  const [touchLeftDown, setTouchLeftDown] = useState(false);
+  const [touchRightDown, setTouchRightDown] = useState(false);
+
+  // Refs for high-speed performance / animation frame loops
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const stopCameraRef = useRef(null);
   const timerStatusRef = useRef(timerStatus);
   const inspectionStartRef = useRef(0);
@@ -46,11 +99,26 @@ function SmartTimer({ session }) {
   const inspectionPenaltyRef = useRef(inspectionPenalty);
   const handsDownRef = useRef(false);
   const ignoreNextSpaceUpRef = useRef(false);
-  const lastHandUiUpdateRef = useRef(0);
+  const warned8sRef = useRef(false);
+  const warned12sRef = useRef(false);
+  const lastPbRef = useRef(null);
 
   useEffect(() => { timerStatusRef.current = timerStatus; }, [timerStatus]);
   useEffect(() => { scrambleRef.current = scramble; }, [scramble]);
   useEffect(() => { inspectionPenaltyRef.current = inspectionPenalty; }, [inspectionPenalty]);
+
+  // Keep track of PB for sound celebration
+  const currentStats = React.useMemo(() => computeStats(solves), [solves]);
+  useEffect(() => {
+    lastPbRef.current = currentStats.pb;
+  }, [currentStats.pb]);
+
+  // Practice mode updates
+  useEffect(() => {
+    if (practiceCase) {
+      setScramble(practiceCase.setupScramble);
+    }
+  }, [practiceCase]);
 
   const clearHoldTimeout = () => {
     clearTimeout(holdTimeoutRef.current);
@@ -73,17 +141,39 @@ function SmartTimer({ session }) {
   };
 
   const recordSolve = (record) => {
+    const isPb = lastPbRef.current !== null && record.finalTime !== null && record.finalTime < lastPbRef.current;
     addSolve({
       ...record,
-      date: new Date().toLocaleTimeString(),
+      date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
+
+    if (isPb) {
+      setTimeout(() => playPbSound(), 200);
+    }
   };
 
+  const nextScramble = useCallback((event = selectedEvent) => {
+    if (practiceCase) {
+      return practiceCase.setupScramble;
+    }
+    return generateScramble(event);
+  }, [selectedEvent, practiceCase]);
+
+  // 1. Start Inspection (or direct hold if inspection disabled)
   const startInspection = () => {
     clearHoldTimeout();
     stopAnimation();
+
+    if (!useInspection) {
+      // Direct timer start mode
+      setStatus('ready');
+      return;
+    }
+
     const startedAt = performance.now();
     inspectionStartRef.current = startedAt;
+    warned8sRef.current = false;
+    warned12sRef.current = false;
     setPenalty(null);
     setInspectionElapsed(0);
     setInspectionRemaining(INSPECTION_LIMIT_MS);
@@ -96,10 +186,21 @@ function SmartTimer({ session }) {
       setInspectionElapsed(elapsed);
       setInspectionRemaining(remaining);
 
+      // WCA Sound Cues
+      if (elapsed >= 8000 && !warned8sRef.current) {
+        warned8sRef.current = true;
+        playWarning8s();
+      }
+      if (elapsed >= 12000 && !warned12sRef.current) {
+        warned12sRef.current = true;
+        playWarning12s();
+      }
+
       if (elapsed >= INSPECTION_DNF_MS) {
         stopAnimation();
         setPenalty('DNF');
         setStatus('stopped');
+        playStopSound();
         recordSolve({
           type: 'solve',
           penalty: 'DNF',
@@ -107,7 +208,7 @@ function SmartTimer({ session }) {
           finalTime: null,
           scramble: scrambleRef.current,
         });
-        setScramble(generateScramble());
+        setScramble(nextScramble());
         return;
       }
 
@@ -117,16 +218,22 @@ function SmartTimer({ session }) {
     rafRef.current = requestAnimationFrame(tickInspection);
   };
 
+  // 2. Begin Hold To Start (Hands down on pads or Space held)
   const beginHoldToStart = () => {
-    if (timerStatusRef.current !== 'inspection') return;
+    const status = timerStatusRef.current;
+    if (status !== 'inspection' && status !== 'idle' && status !== 'stopped') return;
+
     clearHoldTimeout();
     setStatus('holding');
 
     holdTimeoutRef.current = setTimeout(() => {
       if (timerStatusRef.current === 'holding') {
-        const elapsed = performance.now() - inspectionStartRef.current;
-        setPenalty(elapsed > INSPECTION_LIMIT_MS ? '+2' : null);
+        if (useInspection && inspectionStartRef.current > 0) {
+          const elapsed = performance.now() - inspectionStartRef.current;
+          setPenalty(elapsed > INSPECTION_LIMIT_MS ? '+2' : null);
+        }
         setStatus('ready');
+        playReadySound();
       }
     }, HOLD_TO_START_MS);
   };
@@ -134,21 +241,25 @@ function SmartTimer({ session }) {
   const abortHoldToStart = () => {
     clearHoldTimeout();
     if (timerStatusRef.current === 'holding') {
-      setStatus('inspection');
+      setStatus(useInspection && inspectionStartRef.current > 0 ? 'inspection' : 'idle');
     }
   };
 
+  // 3. Start Solve (Hands lifted or Space released when ready)
   const startSolve = () => {
     if (timerStatusRef.current !== 'ready') return;
     clearHoldTimeout();
     stopAnimation();
 
-    const inspectionTime = performance.now() - inspectionStartRef.current;
-    const penalty = inspectionTime > INSPECTION_LIMIT_MS ? '+2' : null;
-    setPenalty(penalty);
+    if (useInspection && inspectionStartRef.current > 0) {
+      const inspectionTime = performance.now() - inspectionStartRef.current;
+      setPenalty(inspectionTime > INSPECTION_LIMIT_MS ? '+2' : null);
+    }
+
     solveStartRef.current = performance.now();
     setDisplayTime(0);
     setStatus('running');
+    playStartSound();
 
     const tickSolve = () => {
       setDisplayTime(performance.now() - solveStartRef.current);
@@ -158,6 +269,7 @@ function SmartTimer({ session }) {
     rafRef.current = requestAnimationFrame(tickSolve);
   };
 
+  // 4. Stop Solve (Hands back on pads or Any key pressed)
   const stopSolve = () => {
     if (timerStatusRef.current !== 'running') return;
     const endTime = performance.now();
@@ -167,6 +279,8 @@ function SmartTimer({ session }) {
     stopAnimation();
     setDisplayTime(rawTime);
     setStatus('stopped');
+    playStopSound();
+
     recordSolve({
       type: 'solve',
       penalty: inspectionPenaltyRef.current,
@@ -174,7 +288,7 @@ function SmartTimer({ session }) {
       finalTime,
       scramble: scrambleRef.current,
     });
-    setScramble(generateScramble());
+    setScramble(nextScramble());
   };
 
   const resetScramble = () => {
@@ -185,14 +299,11 @@ function SmartTimer({ session }) {
     setInspectionElapsed(0);
     setInspectionRemaining(INSPECTION_LIMIT_MS);
     setPenalty(null);
-    setScramble(generateScramble());
+    setScramble(nextScramble());
   };
 
-  /** Cancel inspection or discard an in-progress solve without logging. */
   const hardStop = () => {
-    const status = timerStatusRef.current;
-    if (status === 'idle') return;
-
+    if (timerStatusRef.current === 'idle') return;
     clearHoldTimeout();
     stopAnimation();
     handsDownRef.current = false;
@@ -206,11 +317,36 @@ function SmartTimer({ session }) {
   const copyScramble = async () => {
     try {
       await navigator.clipboard.writeText(scramble);
+      setCopiedScramble(true);
+      setTimeout(() => setCopiedScramble(false), 1500);
     } catch {
-      // clipboard unavailable
+      // clipboard fallback
     }
   };
 
+  const handleEventChange = (e) => {
+    const ev = e.target.value;
+    setSelectedEvent(ev);
+    setScramble(generateScramble(ev));
+  };
+
+  const toggleSound = () => {
+    const next = !soundActive;
+    setSoundActive(next);
+    setSoundEnabled(next);
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
+    }
+  };
+
+  // Keyboard controls
   useEffect(() => {
     const isTypingTarget = (target) => {
       const tag = target?.tagName?.toLowerCase();
@@ -238,7 +374,12 @@ function SmartTimer({ session }) {
 
       if (e.code !== 'Space') return;
       e.preventDefault();
-      if (timerStatusRef.current === 'inspection') beginHoldToStart();
+
+      if (timerStatusRef.current === 'inspection') {
+        beginHoldToStart();
+      } else if (!useInspection && (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped')) {
+        beginHoldToStart();
+      }
     };
 
     const handleKeyUp = (e) => {
@@ -250,7 +391,7 @@ function SmartTimer({ session }) {
         return;
       }
 
-      if (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped') {
+      if (useInspection && (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped')) {
         startInspection();
         return;
       }
@@ -260,7 +401,9 @@ function SmartTimer({ session }) {
         return;
       }
 
-      if (timerStatusRef.current === 'ready') startSolve();
+      if (timerStatusRef.current === 'ready') {
+        startSolve();
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -272,18 +415,42 @@ function SmartTimer({ session }) {
       clearHoldTimeout();
       stopAnimation();
     };
-  }, []);
+  }, [useInspection]);
 
+  // Touchpad event handlers
+  useEffect(() => {
+    const bothPadsTouched = touchLeftDown && touchRightDown;
+    const wasTouched = handsDownRef.current;
+
+    if (showTouchpads) {
+      handsDownRef.current = bothPadsTouched;
+
+      if (!wasTouched && bothPadsTouched) {
+        if (timerStatusRef.current === 'inspection' || (!useInspection && (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped'))) {
+          beginHoldToStart();
+        }
+      } else if (wasTouched && !bothPadsTouched && timerStatusRef.current === 'holding') {
+        abortHoldToStart();
+      } else if (wasTouched && !bothPadsTouched && timerStatusRef.current === 'ready') {
+        startSolve();
+      } else if (!wasTouched && bothPadsTouched && timerStatusRef.current === 'running') {
+        stopSolve();
+      }
+    }
+  }, [touchLeftDown, touchRightDown, showTouchpads, useInspection]);
+
+  // Camera & MediaPipe Hand Tracking
   const handleHandResults = (results) => {
-    const count = results.multiHandLandmarks?.length ?? 0;
-    const now = performance.now();
-    if (now - lastHandUiUpdateRef.current > 200) {
-      lastHandUiUpdateRef.current = now;
-      setHandsDetected(count);
+    const analysis = analyzeStackmatHands(results);
+    setStackmatAnalysis(analysis);
+
+    // Render on canvas overlay
+    if (canvasRef.current) {
+      drawStackmatCanvas(canvasRef.current, videoRef.current, analysis, results);
     }
 
-    const bothHandsDown = areBothHandsDown(results);
     const wasHandsDown = handsDownRef.current;
+    const bothHandsDown = analysis.bothHandsDown;
     handsDownRef.current = bothHandsDown;
 
     if (!wasHandsDown && bothHandsDown && timerStatusRef.current === 'inspection') {
@@ -297,16 +464,17 @@ function SmartTimer({ session }) {
     }
   };
 
-  const enableCamera = () => {
-    if (isCameraLoading || isCameraReady) return;
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraMessage('Camera not available. Use spacebar.');
-      return;
+  const toggleCamera = () => {
+    if (showCamera) {
+      stopCameraRef.current?.();
+      stopCameraRef.current = null;
+      setShowCamera(false);
+      setIsCameraReady(false);
+      setCameraMessage('');
+    } else {
+      setShowCamera(true);
+      setIsCameraLoading(true);
     }
-
-    setIsCameraLoading(true);
-    setShowCamera(true);
   };
 
   useEffect(() => {
@@ -322,12 +490,12 @@ function SmartTimer({ session }) {
         stopCameraRef.current = await startHandCamera(video, handleHandResults);
         if (isMounted) {
           setIsCameraReady(true);
-          setCameraMessage('Camera active — both hands in frame to arm/start/stop.');
+          setCameraMessage('Stackmat active · Place both hands flat on desk pads to arm.');
         }
       } catch (err) {
         if (isMounted) {
           setIsCameraReady(false);
-          setCameraMessage(err?.message || 'Camera failed. Allow access and retry.');
+          setCameraMessage(err?.message || 'Camera failed. Allow webcam permission.');
         }
       } finally {
         if (isMounted) {
@@ -336,11 +504,10 @@ function SmartTimer({ session }) {
       }
     };
 
-    const t = setTimeout(initCamera, 50);
-
+    const timer = setTimeout(initCamera, 80);
     return () => {
       isMounted = false;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
   }, [showCamera]);
 
@@ -349,46 +516,57 @@ function SmartTimer({ session }) {
     stopCameraRef.current = null;
   }, []);
 
+  // Display time formatting
   const displayLabel = () => {
     if (timerStatus === 'inspection' || timerStatus === 'holding' || timerStatus === 'ready') {
       return `${Math.ceil(inspectionRemaining / 1000)}`;
     }
     if (timerStatus === 'stopped' && solves[0]?.penalty === 'DNF') return 'DNF';
     if (timerStatus === 'idle') return '0.00';
-    return formatTime(displayTime).slice(3);
+    return formatTime(displayTime);
   };
 
-  const statusClass = timerStatus === 'holding'
-    ? 'holding'
-    : timerStatus === 'ready'
+  const statusClass =
+    timerStatus === 'holding'
+      ? 'holding'
+      : timerStatus === 'ready'
       ? 'ready'
       : timerStatus === 'running'
-        ? 'running'
-        : timerStatus === 'inspection'
-          ? 'inspection'
-          : 'stopped';
+      ? 'running'
+      : timerStatus === 'inspection'
+      ? 'inspection'
+      : 'stopped';
 
   const statusText = {
-    idle: 'Press space to start inspection',
-    inspection: 'Inspection on · Esc to cancel',
-    holding: 'Hold steady… · Esc to cancel',
-    ready: 'Release to start · Esc to cancel',
-    running: 'Solving · Esc to discard',
-    stopped: 'Press space for next solve',
+    idle: useInspection ? 'Press space to start inspection' : 'Hold space to arm timer',
+    inspection: 'Inspection on · Place hands on pads or hold space · Esc to cancel',
+    holding: 'Hold steady… (300ms) · Esc to cancel',
+    ready: 'Release to start solving!',
+    running: 'Solving · Any key or hands on pads to stop',
+    stopped: 'Solve complete · Press space for next solve',
   }[timerStatus];
 
-  const warningText = inspectionElapsed >= 12000
-    ? '12 seconds'
-    : inspectionElapsed >= 8000
-      ? '8 seconds'
+  const warningText =
+    inspectionElapsed >= 12000
+      ? '12 seconds!'
+      : inspectionElapsed >= 8000
+      ? '8 seconds!'
       : '';
 
   return (
-    <div className="timer-layout">
+    <div className={`timer-layout ${isFullscreen ? 'fullscreen-mode' : ''}`}>
       <div className="timer-main">
+        {/* Top Toolbar */}
         <div className="timer-toolbar">
-          <select className="toolbar-select" defaultValue="3x3" disabled>
-            <option value="3x3">3x3</option>
+          <select
+            className="toolbar-select"
+            value={selectedEvent}
+            onChange={handleEventChange}
+            disabled={timerStatus === 'running' || practiceCase !== null}
+          >
+            {CUBE_EVENTS.map((ev) => (
+              <option key={ev.id} value={ev.id}>{ev.name}</option>
+            ))}
           </select>
 
           <div className="session-controls">
@@ -396,64 +574,143 @@ function SmartTimer({ session }) {
               className="toolbar-select session-select"
               value={activeSessionId || ''}
               onChange={(e) => switchSession(e.target.value)}
+              disabled={timerStatus === 'running'}
             >
               {sessions.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            <button type="button" className="toolbar-btn" onClick={createSession}>
-              + New Session
+            <button
+              type="button"
+              className="toolbar-btn"
+              onClick={createSession}
+              disabled={timerStatus === 'running'}
+            >
+              + Session
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5 ml-auto">
+            <button
+              type="button"
+              className={`icon-btn ${soundActive ? 'active' : ''}`}
+              onClick={toggleSound}
+              title={soundActive ? 'Mute sound effects' : 'Enable sound effects'}
+            >
+              {soundActive ? <Volume2 className="w-4 h-4 text-[var(--accent-blue)]" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+
+            <button
+              type="button"
+              className={`icon-btn ${showVisualizer ? 'active' : ''}`}
+              onClick={() => setShowVisualizer((v) => !v)}
+              title="Toggle 2D Scramble Net Visualizer"
+            >
+              {showVisualizer ? <EyeOff className="w-4 h-4 text-[var(--accent-blue)]" /> : <Eye className="w-4 h-4" />}
+            </button>
+
+            <button
+              type="button"
+              className={`icon-btn ${showCamera ? 'active' : ''}`}
+              onClick={toggleCamera}
+              title={showCamera ? 'Turn off camera Stackmat' : 'Turn on camera Stackmat'}
+            >
+              {showCamera ? <Video className="w-4 h-4 text-green-400" /> : <VideoOff className="w-4 h-4" />}
+            </button>
+
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={toggleFullscreen}
+              title="Toggle Fullscreen"
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
           </div>
         </div>
 
-        <div className="scramble-block">
-          <div className="scramble scramble-large">{scramble}</div>
-          <div className="scramble-actions">
-            <button type="button" className="icon-btn" onClick={copyScramble} title="Copy scramble">
-              <Copy className="w-4 h-4" />
-            </button>
-            <button type="button" className="icon-btn" onClick={resetScramble} title="New scramble">
-              <RefreshCw className="w-4 h-4" />
-            </button>
-            {!isCameraReady && (
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={enableCamera}
-                disabled={isCameraLoading}
-                title="Enable camera"
-              >
-                <Video className="w-4 h-4" />
+        {/* Practice Mode Banner */}
+        {practiceCase && (
+          <div className="practice-banner">
+            <div className="practice-info">
+              <span className="practice-tag">🎯 Practice Mode</span>
+              <span className="font-semibold text-white">{practiceCase.name}</span>
+              <span className="text-xs text-[var(--text-muted)] font-mono">({practiceCase.notation})</span>
+            </div>
+            {onExitPractice && (
+              <button type="button" className="practice-exit-btn" onClick={onExitPractice}>
+                <X className="w-3.5 h-3.5 mr-1" /> Exit Practice
               </button>
             )}
           </div>
+        )}
+
+        {/* Scramble Display Block */}
+        <div className="scramble-block">
+          <div className="scramble scramble-large">{scramble}</div>
+          <div className="scramble-actions">
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={copyScramble}
+              title="Copy scramble"
+            >
+              {copiedScramble ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={resetScramble}
+              disabled={timerStatus === 'running'}
+              title="New scramble"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Collapsible 2D Unfolded Scramble Net */}
+          {showVisualizer && (
+            <div className="scramble-visualizer-box">
+              <div className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+                Scramble Verification Net
+              </div>
+              <CubeNetVisualizer scramble={scramble} size={160} />
+            </div>
+          )}
         </div>
 
+        {/* Center Timer Display */}
         <div className="timer-center">
           <div className={`timer-display-large ${statusClass}`}>{displayLabel()}</div>
           <div className="timer-status-text">{statusText}</div>
           {warningText && (timerStatus === 'inspection' || timerStatus === 'holding' || timerStatus === 'ready') && (
-            <div className="timer-warning">{warningText}</div>
+            <div className="timer-warning text-red-400 font-bold animate-bounce">{warningText}</div>
           )}
           {inspectionPenalty === '+2' && (
-            <div className="timer-warning">+2 inspection penalty</div>
+            <div className="timer-warning">+2 inspection penalty applied</div>
           )}
         </div>
 
+        {/* Camera / Stackmat Video Overlay */}
         {showCamera && (
-          <div className="camera-block">
-            <div className="relative">
+          <div className="camera-stackmat-wrap">
+            <div className="relative overflow-hidden rounded-xl border border-[var(--border-panel)] shadow-2xl">
               <video
                 ref={videoRef}
                 autoPlay
                 muted
                 playsInline
-                className="camera-video"
+                className="hidden"
+              />
+              <canvas
+                ref={canvasRef}
+                width={380}
+                height={260}
+                className="camera-stackmat-canvas"
               />
               {isCameraReady && (
                 <div className="camera-badge">
-                  Hands: {handsDetected}/2
+                  Stackmat: {stackmatAnalysis?.bothHandsDown ? 'BOTH PADS ARMED' : (stackmatAnalysis?.statusMessage || 'Waiting for hands')}
                 </div>
               )}
             </div>
@@ -461,16 +718,63 @@ function SmartTimer({ session }) {
           </div>
         )}
 
-        <p className="timer-hint">
-          Space: inspect → hold → release to start → any key to stop · Esc: cancel / discard
-          {activeSession ? ` · ${activeSession.name}` : ''}
-        </p>
+        {/* On-Screen Touchpads (For Mobile / Touchscreen or Visual Mouse Cubing) */}
+        {showTouchpads && (
+          <div className="onscreen-touchpads">
+            <div
+              className={`touchpad-zone left ${touchLeftDown ? 'active' : ''}`}
+              onPointerDown={() => setTouchLeftDown(true)}
+              onPointerUp={() => setTouchLeftDown(false)}
+              onPointerLeave={() => setTouchLeftDown(false)}
+            >
+              <span>LEFT PAD</span>
+            </div>
+            <div
+              className={`touchpad-zone right ${touchRightDown ? 'active' : ''}`}
+              onPointerDown={() => setTouchRightDown(true)}
+              onPointerUp={() => setTouchRightDown(false)}
+              onPointerLeave={() => setTouchRightDown(false)}
+            >
+              <span>RIGHT PAD</span>
+            </div>
+          </div>
+        )}
+
+        <div className="timer-footer-hints">
+          <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useInspection}
+                onChange={(e) => setUseInspection(e.target.checked)}
+                className="rounded accent-[var(--accent-blue)]"
+              />
+              <span>15s WCA Inspection</span>
+            </label>
+
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showTouchpads}
+                onChange={(e) => setShowTouchpads(e.target.checked)}
+                className="rounded accent-[var(--accent-blue)]"
+              />
+              <span>On-Screen Touchpads</span>
+            </label>
+          </div>
+          <p className="timer-hint mt-2">
+            Space: inspect → hold (300ms) → release to start → any key to stop · Esc: cancel
+          </p>
+        </div>
       </div>
 
+      {/* Right Sidebar: Session History and WCA Analytics */}
       <SolveHistoryPanel
         solves={solves}
         onDelete={deleteSolve}
         onApplyPenalty={updatePenalty}
+        onLoadScramble={(scrambleToLoad) => setScramble(scrambleToLoad)}
+        onClearSession={clearCurrentSession}
       />
     </div>
   );

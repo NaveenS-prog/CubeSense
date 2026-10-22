@@ -513,6 +513,47 @@ export function useTimerSessions(authSession) {
     }
   }, [activeSessionId, sessions, userId, persistLocal]);
 
+  const clearCurrentSession = useCallback(async () => {
+    setSolves([]);
+    const local = readLocal(userId) || { solvesBySession: {} };
+    persistLocal(sessions, activeSessionId, {
+      ...local.solvesBySession,
+      [activeSessionId]: [],
+    });
+
+    if (isSupabaseConfigured && userId && activeSessionId) {
+      const { error } = await supabase
+        .from('solves')
+        .delete()
+        .eq('session_id', activeSessionId)
+        .eq('user_id', userId);
+
+      if (error) {
+        console.warn('Unable to clear cloud solves:', error);
+      }
+    }
+  }, [activeSessionId, sessions, userId, persistLocal]);
+
+  const renameSession = useCallback(async (newName) => {
+    if (!newName?.trim()) return;
+    const trimmed = newName.trim();
+
+    setSessions((prev) => {
+      const next = prev.map((s) => (s.id === activeSessionId ? { ...s, name: trimmed } : s));
+      const local = readLocal(userId) || { solvesBySession: {} };
+      persistLocal(next, activeSessionId, local.solvesBySession || {});
+      return next;
+    });
+
+    if (isSupabaseConfigured && userId && cloudSessionsEnabled && activeSessionId) {
+      await supabase
+        .from('timing_sessions')
+        .update({ name: trimmed })
+        .eq('id', activeSessionId)
+        .eq('user_id', userId);
+    }
+  }, [activeSessionId, userId, cloudSessionsEnabled, persistLocal]);
+
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === activeSessionId) || null,
     [sessions, activeSessionId],
@@ -529,5 +570,7 @@ export function useTimerSessions(authSession) {
     addSolve,
     deleteSolve,
     updatePenalty,
+    clearCurrentSession,
+    renameSession,
   };
 }

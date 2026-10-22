@@ -1,68 +1,74 @@
-# VibeTimer & CubeTeacher - Application Summary
+# CubeSense - Enhanced Speedcubing Application
 
 ## Overview
-This project implements a modern web application for speedcubing with two main features:
-1. **Smart Timer**: Camera-triggered cube timer using hand detection (MediaPipe Hands) with keyboard fallback
-2. **Algo Teacher**: Interactive dashboard for learning and practicing OLL/PLL algorithms
+CubeSense is a comprehensive speedcubing platform featuring a computer-vision camera Stackmat timer, WCA-compliant inspection and statistics, interactive 2D scramble verification, and an intelligent CFOP algorithm trainer.
+
+## Key Improvements Implemented
+
+1. **Vision Stackmat Timer (MediaPipe Hands)**:
+   - Upgraded from simple hand-count placeholder to genuine 21-landmark geometric analysis.
+   - Accurately discriminates between flat palms resting on desk pads vs holding a cube.
+   - Dual virtual sensor zones (Left Touchpad and Right Touchpad).
+   - Real-time mirrored canvas HUD overlay with glowing neon pads and hand skeletons.
+   - Added on-screen touchpads and full spacebar keyboard fallback.
+
+2. **Web Audio API Synthesizer**:
+   - Zero external audio files (100% offline-ready).
+   - Official WCA 8-second and 12-second audible alerts during inspection.
+   - Armed ready chime (300ms hold reached), start click, stop tone, and triumphant Personal Best (PB) fanfare.
+   - One-click mute toggle.
+
+3. **Rubik's Cube Simulator & 2D Scramble Net**:
+   - Built 3x3 Rubik's cube state engine (`src/utils/cubeSimulator.js`) supporting all face turns, rotations, and slice moves.
+   - Unfolded 6-face 2D Net SVG visualizer (`src/components/CubeNetVisualizer.jsx`) so cubers can verify their scrambles.
+   - Multi-event support: 3x3x3, 2x2x2, 4x4x4, and 3x3 One-Handed (OH).
+
+4. **CFOP Algorithm Trainer (Algo Teacher)**:
+   - Comprehensive database of 2-Look OLL (edges & corners), 2-Look PLL, and full 21 PLL cases (`src/data/algorithms.js`).
+   - High-fidelity SVG diagrams (`src/components/AlgoVisualizer.jsx`): OLL yellow facelets with side orientation bars, and PLL permutation cycle arrows.
+   - Real mathematical algorithm inverter that generates exact setup scrambles.
+   - Direct Practice Mode on Smart Timer with dedicated practice banner.
+
+5. **WCA Statistics & Analytics**:
+   - Fixed WCA Ao5 and Ao12 trimming rules (single DNF treated as worst time; DNF average only when ≥ 2 DNFs).
+   - Real-time tracking of PB, Worst Single, Session Mean, Current Ao5, Best Ao5, Current Ao12, and Best Ao12.
+   - Interactive Solve Detail Modal with timestamp, raw/penalty times, scramble string, 2D preview net, and re-scramble trigger.
+   - SVG session trend sparkline chart.
+   - 1-click export of session solves to JSON or CSV format.
 
 ## File Structure
 ```
-vibetimer_cubeteacher/
+CubeSense/
 ├── index.html
 ├── src/
 │   ├── main.jsx
 │   ├── index.css
 │   ├── App.jsx
+│   ├── data/
+│   │   └── algorithms.js
+│   ├── lib/
+│   │   ├── mediapipeHands.js
+│   │   └── supabaseClient.js
 │   ├── utils/
-│   │   └── scramble.js
+│   │   ├── cubeSimulator.js
+│   │   ├── scramble.js
+│   │   ├── soundEffects.js
+│   │   └── timerStats.js
+│   ├── hooks/
+│   │   └── useTimerSessions.js
 │   └── components/
 │       ├── SmartTimer.jsx
-│       └── AlgoTeacher.jsx
+│       ├── AlgoTeacher.jsx
+│       ├── AlgoVisualizer.jsx
+│       ├── CubeNetVisualizer.jsx
+│       ├── AuthPanel.jsx
+│       ├── ResetPassword.jsx
+│       └── layout/
+│           ├── Sidebar.jsx
+│           ├── SolveHistoryPanel.jsx
+│           ├── SolveDetailModal.jsx
+│           └── SessionTrendChart.jsx
 ├── package.json
 ├── vite.config.js
-├── tailwind.config.cjs
-├── postcss.config.js
 └── README.md
 ```
-
-## Key Implementation Details
-
-### Smart Timer Features
-- Uses MediaPipe Hands (via CDN) for hand detection
-- Timer states: idle → ready (both hands flat) → running (hands lifted) → stopped (both hands flat again)
-- Keyboard fallback: Spacebar down = ready, release = start, any key = stop
-- Random scramble generator with reset functionality
-- Session history tracking (last 10 solves)
-- Responsive UI with Tailwind CSS and custom neon aesthetic
-
-### Algo Teacher Features
-- 2-Look OLL and PLL algorithms (8 OLL, 9 PLL cases)
-- Visual placeholder for each algorithm's cube pattern
-- Practice button that generates setup scrambles
-- Integration timer communication via localStorage (placeholder for full implementation)
-
-## Setup Instructions
-1. Install dependencies: `npm install`
-2. Start development server: `npm run dev`
-3. Build for production: `npm run build`
-
-## Known Limitations & Future Improvements
-- Hand detection currently uses a placeholder (always returns true when hands detected) - needs proper landmark analysis for flat hand detection
-- Algorithm SVG visualizations are placeholders - should be replaced with actual cube face representations
-- Timer-Algo Teacher communication uses localStorage - could be improved with React Context or state management
-- No actual cube solving validation - relies on user honesty
-- Could add sound effects, vibrations, and more advanced statistics
-
-## Dependencies
-- React 18
-- Vite
-- Tailwind CSS
-- MediaPipe Hands (CDN)
-- Lucide React (icons)
-
-## Next Steps
-1. Replace hand detection placeholder with proper landmark analysis
-2. Implement real SVG visualizations for algorithm cases
-3. Replace localStorage communication with proper state management
-4. Add actual cube solver validation (optional)
-5. Enhance UI/UX with animations and sound

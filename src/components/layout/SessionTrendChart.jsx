@@ -1,0 +1,64 @@
+import React from 'react';
+import { formatTime } from '../../utils/timerStats';
+
+export default function SessionTrendChart({ solves, height = 50 }) {
+  if (!solves || solves.length < 2) return null;
+
+  // Chronological order (oldest to newest)
+  const chronological = [...solves].reverse();
+  const valid = chronological.filter((s) => s.penalty !== 'DNF' && Number.isFinite(s.finalTime));
+
+  if (valid.length < 2) return null;
+
+  const times = valid.map((s) => s.finalTime);
+  const min = Math.min(...times);
+  const max = Math.max(...times);
+  const range = max - min || 1;
+
+  const width = 280;
+  const paddingX = 8;
+  const paddingY = 6;
+  const chartW = width - paddingX * 2;
+  const chartH = height - paddingY * 2;
+
+  const points = times.map((t, idx) => {
+    const x = paddingX + (idx / (times.length - 1)) * chartW;
+    const y = paddingY + chartH - ((t - min) / range) * chartH;
+    return `${x},${y}`;
+  });
+
+  const pathData = `M ${points.join(' L ')}`;
+
+  // Area under line
+  const areaData = `${pathData} L ${paddingX + chartW},${height} L ${paddingX},${height} Z`;
+
+  return (
+    <div className="session-trend-container">
+      <div className="flex items-center justify-between text-[10px] text-[var(--text-muted)] mb-1 px-1">
+        <span>Session Trend</span>
+        <span>Min: {formatTime(min)} · Max: {formatTime(max)}</span>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} className="overflow-visible">
+        <defs>
+          <linearGradient id="trend-gradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
+        <path d={areaData} fill="url(#trend-gradient)" />
+        <path d={pathData} fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Latest point dot */}
+        {points.length > 0 && (
+          <circle
+            cx={points[points.length - 1].split(',')[0]}
+            cy={points[points.length - 1].split(',')[1]}
+            r="3"
+            fill="#22c55e"
+            stroke="#0b0e14"
+            strokeWidth="1.5"
+          />
+        )}
+      </svg>
+    </div>
+  );
+}

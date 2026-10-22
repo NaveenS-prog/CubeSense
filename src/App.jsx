@@ -8,6 +8,7 @@ import { isSupabaseConfigured, supabase } from './lib/supabaseClient';
 
 function App() {
   const [activeTab, setActiveTab] = useState('timer');
+  const [practiceCase, setPracticeCase] = useState(null);
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -103,10 +104,21 @@ function App() {
               </div>
             )}
 
-            {activeTab === 'timer' && <SmartTimer session={session} />}
+            {activeTab === 'timer' && (
+              <SmartTimer
+                session={session}
+                practiceCase={practiceCase}
+                onExitPractice={() => setPracticeCase(null)}
+              />
+            )}
             {activeTab === 'teacher' && (
               <div className="teacher-page">
-                <AlgoTeacher />
+                <AlgoTeacher
+                  onStartPractice={(caseObj) => {
+                    setPracticeCase(caseObj);
+                    setActiveTab('timer');
+                  }}
+                />
               </div>
             )}
           </>
