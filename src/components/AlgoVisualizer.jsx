@@ -134,21 +134,40 @@ export default function AlgoVisualizer({ caseObj, size = 96, className = '' }) {
     );
   }
 
-  // --- PLL Rendering ---
+  // --- PLL Rendering with Authentic CubeSkills Full Last-Layer Rim & Cycle Arrows ---
   if (isPLL) {
     const centerCoords = {
-      'corner-top-left': { x: 30, y: 30 },
-      'back': { x: 50, y: 30 },
-      'corner-top-right': { x: 70, y: 30 },
-      'left': { x: 30, y: 50 },
+      'corner-top-left': { x: 32.5, y: 32.5 },
+      'back': { x: 50, y: 32.5 },
+      'corner-top-right': { x: 67.5, y: 32.5 },
+      'left': { x: 32.5, y: 50 },
       'center': { x: 50, y: 50 },
-      'right': { x: 70, y: 50 },
-      'corner-bottom-left': { x: 30, y: 70 },
-      'front': { x: 50, y: 70 },
-      'corner-bottom-right': { x: 70, y: 70 },
+      'right': { x: 67.5, y: 50 },
+      'corner-bottom-left': { x: 32.5, y: 67.5 },
+      'front': { x: 50, y: 67.5 },
+      'corner-bottom-right': { x: 67.5, y: 67.5 },
+    };
+
+    const FACE_COLORS = {
+      F: '#22c55e', // Green (Front)
+      B: '#3b82f6', // Blue (Back)
+      R: '#ef4444', // Red (Right)
+      L: '#f97316', // Orange (Left)
+      U: '#facc15', // Yellow (Up)
+      D: '#f8fafc', // White (Down)
     };
 
     const arrows = caseObj.arrows || [];
+    const rim = caseObj.rim || null;
+
+    // Center 3x3 layout
+    const cSize = 16;
+    const cGap = 1.5;
+    const cStart = 24.5;
+
+    // Rim layout
+    const rimThickness = 8;
+    const rimGap = 2.5;
 
     return (
       <svg
@@ -160,47 +179,147 @@ export default function AlgoVisualizer({ caseObj, size = 96, className = '' }) {
         <defs>
           <marker
             id="pll-arrowhead"
-            markerWidth="7"
-            markerHeight="7"
-            refX="5"
-            refY="3.5"
+            viewBox="0 0 10 10"
+            refX="6"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
             orient="auto"
           >
-            <polygon points="0 0, 7 3.5, 0 7" fill="#38bdf8" />
+            <path d="M 1 2 L 8 5 L 1 8 z" fill="#090d16" />
           </marker>
           <marker
-            id="pll-arrowhead-double"
-            markerWidth="7"
-            markerHeight="7"
-            refX="5"
-            refY="3.5"
+            id="pll-arrowhead-start"
+            viewBox="0 0 10 10"
+            refX="3"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
             orient="auto"
           >
-            <polygon points="0 0, 7 3.5, 0 7" fill="#f43f5e" />
+            <path d="M 8 2 L 1 5 L 8 8 z" fill="#090d16" />
           </marker>
         </defs>
 
-        <rect x="18" y="18" width="64" height="64" rx="5" fill="#0c1017" stroke="#334155" strokeWidth="1.5" />
+        {/* Center 3x3 Yellow Facelets Base Frame */}
+        <rect
+          x={cStart - 1}
+          y={cStart - 1}
+          width={cSize * 3 + cGap * 2 + 2}
+          height={cSize * 3 + cGap * 2 + 2}
+          rx="2.5"
+          fill="#0c1017"
+          stroke="#000000"
+          strokeWidth="1.2"
+        />
+
+        {/* 3x3 Yellow Facelets */}
         {[0, 1, 2].map((r) =>
           [0, 1, 2].map((c) => {
-            const pos = getStickerPos(r, c);
+            const x = cStart + c * (cSize + cGap);
+            const y = cStart + r * (cSize + cGap);
             return (
               <rect
-                key={`${r}-${c}`}
-                x={pos.x}
-                y={pos.y}
-                width={stickerSize}
-                height={stickerSize}
-                rx="2.5"
+                key={`pll-c-${r}-${c}`}
+                x={x}
+                y={y}
+                width={cSize}
+                height={cSize}
+                rx="1.5"
                 fill="#facc15"
-                stroke="#ca8a04"
-                strokeWidth="0.8"
-                opacity="0.9"
+                stroke="#0f172a"
+                strokeWidth="1"
               />
             );
           })
         )}
 
+        {/* Outer Rim Side Facelets (Top, Bottom, Left, Right) */}
+        {rim && (
+          <g className="pll-rim-stickers">
+            {/* Top Rim (Back face: left-to-right) */}
+            {rim.top?.map((colorKey, col) => {
+              const x = cStart + col * (cSize + cGap);
+              const y = cStart - rimGap - rimThickness;
+              const fill = FACE_COLORS[colorKey] || '#334155';
+              return (
+                <rect
+                  key={`rim-top-${col}`}
+                  x={x}
+                  y={y}
+                  width={cSize}
+                  height={rimThickness}
+                  rx="1.5"
+                  fill={fill}
+                  stroke="#000000"
+                  strokeWidth="1.1"
+                />
+              );
+            })}
+
+            {/* Bottom Rim (Front face: left-to-right) */}
+            {rim.bottom?.map((colorKey, col) => {
+              const x = cStart + col * (cSize + cGap);
+              const y = cStart + 3 * cSize + 2 * cGap + rimGap;
+              const fill = FACE_COLORS[colorKey] || '#334155';
+              return (
+                <rect
+                  key={`rim-bottom-${col}`}
+                  x={x}
+                  y={y}
+                  width={cSize}
+                  height={rimThickness}
+                  rx="1.5"
+                  fill={fill}
+                  stroke="#000000"
+                  strokeWidth="1.1"
+                />
+              );
+            })}
+
+            {/* Left Rim (Left face: top-to-bottom) */}
+            {rim.left?.map((colorKey, row) => {
+              const x = cStart - rimGap - rimThickness;
+              const y = cStart + row * (cSize + cGap);
+              const fill = FACE_COLORS[colorKey] || '#334155';
+              return (
+                <rect
+                  key={`rim-left-${row}`}
+                  x={x}
+                  y={y}
+                  width={rimThickness}
+                  height={cSize}
+                  rx="1.5"
+                  fill={fill}
+                  stroke="#000000"
+                  strokeWidth="1.1"
+                />
+              );
+            })}
+
+            {/* Right Rim (Right face: top-to-bottom) */}
+            {rim.right?.map((colorKey, row) => {
+              const x = cStart + 3 * cSize + 2 * cGap + rimGap;
+              const y = cStart + row * (cSize + cGap);
+              const fill = FACE_COLORS[colorKey] || '#334155';
+              return (
+                <rect
+                  key={`rim-right-${row}`}
+                  x={x}
+                  y={y}
+                  width={rimThickness}
+                  height={cSize}
+                  rx="1.5"
+                  fill={fill}
+                  stroke="#000000"
+                  strokeWidth="1.1"
+                />
+              );
+            })}
+          </g>
+        )}
+
+        {/* Permutation Cycle & Swap Arrows (Bold high-contrast black) */}
         {arrows.map((arr, i) => {
           const from = centerCoords[arr.from] || { x: 50, y: 50 };
           const to = centerCoords[arr.to] || { x: 50, y: 50 };
@@ -209,33 +328,27 @@ export default function AlgoVisualizer({ caseObj, size = 96, className = '' }) {
           const dx = to.x - from.x;
           const dy = to.y - from.y;
           const dist = Math.hypot(dx, dy) || 1;
-          const endX = to.x - (dx / dist) * 4;
-          const endY = to.y - (dy / dist) * 4;
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          const startX = from.x + nx * (isDouble ? 4 : 2);
+          const startY = from.y + ny * (isDouble ? 4 : 2);
+          const endX = to.x - nx * 4.5;
+          const endY = to.y - ny * 4.5;
 
           return (
-            <g key={i}>
+            <g key={`pll-arr-${i}`}>
               <line
-                x1={from.x}
-                y1={from.y}
+                x1={startX}
+                y1={startY}
                 x2={endX}
                 y2={endY}
-                stroke={isDouble ? '#f43f5e' : '#38bdf8'}
-                strokeWidth="2.5"
+                stroke="#090d16"
+                strokeWidth="2.8"
                 strokeLinecap="round"
-                markerEnd={`url(#${isDouble ? 'pll-arrowhead-double' : 'pll-arrowhead'})`}
+                markerStart={isDouble ? 'url(#pll-arrowhead-start)' : undefined}
+                markerEnd="url(#pll-arrowhead)"
               />
-              {isDouble && (
-                <line
-                  x1={to.x}
-                  y1={to.y}
-                  x2={from.x + (dx / dist) * 4}
-                  y2={from.y + (dy / dist) * 4}
-                  stroke="#f43f5e"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  markerEnd="url(#pll-arrowhead-double)"
-                />
-              )}
             </g>
           );
         })}

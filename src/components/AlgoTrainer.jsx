@@ -93,9 +93,29 @@ export default function AlgoTrainer({ onSendToMainTimer }) {
     );
   }, [selectedSubset, searchQuery, favorites]);
 
-  // Active drill case index
+  // Active drill case index & selected algorithm variation index
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedAlgIndex, setSelectedAlgIndex] = useState(0);
   const activeCase = currentCases[currentIndex] || currentCases[0] || null;
+
+  // Reset variation selection when active case changes
+  useEffect(() => {
+    setSelectedAlgIndex(0);
+  }, [activeCase?.id]);
+
+  // Active variation object & notation
+  const activeAlgObj = useMemo(() => {
+    if (activeCase?.algorithms && activeCase.algorithms[selectedAlgIndex]) {
+      return activeCase.algorithms[selectedAlgIndex];
+    }
+    return {
+      name: 'Standard',
+      notation: activeCase?.notation || '',
+      note: '',
+    };
+  }, [activeCase, selectedAlgIndex]);
+
+  const activeNotation = activeAlgObj.notation;
 
   // Peek algorithm toggle
   const [peekFormula, setPeekFormula] = useState(true);
@@ -148,11 +168,11 @@ export default function AlgoTrainer({ onSendToMainTimer }) {
     });
   };
 
-  // Generate Setup Scramble
+  // Generate Setup Scramble based on currently selected algorithm variation
   const setupScramble = useMemo(() => {
-    if (!activeCase?.notation) return '';
-    return invertAlgorithm(activeCase.notation);
-  }, [activeCase]);
+    if (!activeNotation) return '';
+    return invertAlgorithm(activeNotation);
+  }, [activeNotation]);
 
   // Copy Setup / Formula
   const handleCopy = async (text) => {
@@ -439,8 +459,8 @@ export default function AlgoTrainer({ onSendToMainTimer }) {
                   <button
                     type="button"
                     className="algo-icon-btn"
-                    onClick={() => handleCopy(activeCase.notation)}
-                    title="Copy algorithm"
+                    onClick={() => handleCopy(activeNotation)}
+                    title="Copy active algorithm"
                   >
                     {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                   </button>
@@ -452,7 +472,14 @@ export default function AlgoTrainer({ onSendToMainTimer }) {
                 <AlgoVisualizer caseObj={activeCase} size={150} />
               </div>
 
-              <h2 className="drill-case-title">{activeCase.name}</h2>
+              <div className="flex items-center justify-between gap-2 mt-2">
+                <h2 className="drill-case-title">{activeCase.name}</h2>
+                {activeCase.algorithms && activeCase.algorithms.length > 1 && (
+                  <span className="text-[11px] font-mono text-[var(--accent-cyan)] bg-[var(--accent-cyan)]/10 px-2 py-0.5 rounded border border-[var(--accent-cyan)]/30">
+                    {activeAlgObj.name}
+                  </span>
+                )}
+              </div>
               {activeCase.description && (
                 <p className="drill-case-desc">{activeCase.description}</p>
               )}
@@ -480,7 +507,9 @@ export default function AlgoTrainer({ onSendToMainTimer }) {
               {/* Revealable Solution Formula */}
               <div className="drill-formula-block">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold text-[var(--text-dim)] uppercase">Algorithm Formula</span>
+                  <span className="text-xs font-semibold text-[var(--text-dim)] uppercase">
+                    Algorithm Formula
+                  </span>
                   <button
                     type="button"
                     className="text-xs text-[var(--text-muted)] hover:text-white flex items-center gap-1"
@@ -491,15 +520,66 @@ export default function AlgoTrainer({ onSendToMainTimer }) {
                   </button>
                 </div>
                 {peekFormula ? (
-                  <div className="drill-formula-text">{activeCase.notation}</div>
+                  <div className="drill-formula-text">{activeNotation}</div>
                 ) : (
                   <div className="drill-formula-hidden" onClick={() => setPeekFormula(true)}>
                     <span>Tap or Press &apos;H&apos; to reveal algorithm</span>
                   </div>
                 )}
-                {activeCase.alternative && peekFormula && (
+                {activeAlgObj.note && peekFormula && (
+                  <div className="text-[11px] text-[var(--accent-cyan)] mt-1 font-mono">
+                    ✦ {activeAlgObj.note}
+                  </div>
+                )}
+                {activeCase.alternative && peekFormula && !activeCase.algorithms && (
                   <div className="text-xs text-[var(--text-dim)] mt-1 font-mono">
                     Alt: {activeCase.alternative}
+                  </div>
+                )}
+
+                {/* Multiple Algorithm Variations Selector (for PLL & multi-alg cases) */}
+                {activeCase.algorithms && activeCase.algorithms.length > 1 && (
+                  <div className="algo-variations-selector mt-3 pt-3 border-t border-[var(--border-subtle)]">
+                    <div className="flex items-center justify-between text-[11px] mb-2 font-medium">
+                      <span className="text-[var(--text-secondary)] uppercase tracking-wider font-semibold">
+                        Algorithm Variations ({activeCase.algorithms.length})
+                      </span>
+                      <span className="text-[10px] text-[var(--text-muted)]">
+                        Select variation to drill
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                      {activeCase.algorithms.map((algItem, idx) => {
+                        const isSelected = selectedAlgIndex === idx;
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setSelectedAlgIndex(idx)}
+                            className={`text-left p-2 rounded-lg border transition-all text-xs ${
+                              isSelected
+                                ? 'bg-[var(--accent-cyan)]/15 border-[var(--accent-cyan)] text-white shadow-sm'
+                                : 'bg-[var(--bg-tertiary)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[var(--border-medium)]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between font-medium">
+                              <span className={isSelected ? 'text-[var(--accent-cyan)] font-semibold' : ''}>
+                                {algItem.name}
+                              </span>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-[var(--accent-cyan)]" />}
+                            </div>
+                            <div className="font-mono text-[11px] text-[var(--text-dim)] truncate mt-0.5">
+                              {algItem.notation}
+                            </div>
+                            {algItem.note && (
+                              <div className="text-[10px] text-[var(--text-muted)] italic mt-0.5">
+                                {algItem.note}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -509,7 +589,13 @@ export default function AlgoTrainer({ onSendToMainTimer }) {
                 <button
                   type="button"
                   className="drill-action-btn secondary mt-3"
-                  onClick={() => onSendToMainTimer(activeCase)}
+                  onClick={() => onSendToMainTimer({
+                    ...activeCase,
+                    notation: activeNotation,
+                    name: activeCase.algorithms?.length > 1
+                      ? `${activeCase.name} (${activeAlgObj.name})`
+                      : activeCase.name,
+                  })}
                 >
                   <ExternalLink className="w-4 h-4 mr-2" /> Load into Main Timer
                 </button>
@@ -746,7 +832,14 @@ export default function AlgoTrainer({ onSendToMainTimer }) {
                   }}
                 >
                   <div className="algo-card-header">
-                    <span className="algo-badge">{caseObj.category}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="algo-badge">{caseObj.category}</span>
+                      {caseObj.algorithms && caseObj.algorithms.length > 1 && (
+                        <span className="text-[10px] font-mono font-medium text-[var(--accent-cyan)] bg-[var(--accent-cyan)]/10 px-1.5 py-0.5 rounded border border-[var(--accent-cyan)]/30">
+                          {caseObj.algorithms.length} algs
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5">
                       {casePb && (
                         <span className="text-[11px] font-mono text-emerald-400 font-bold bg-emerald-950/50 px-2 py-0.5 rounded">
@@ -772,6 +865,11 @@ export default function AlgoTrainer({ onSendToMainTimer }) {
                   <div className="algo-info">
                     <h3 className="algo-name-title">{caseObj.name}</h3>
                     <div className="algo-formula">{caseObj.notation}</div>
+                    {caseObj.algorithms && caseObj.algorithms.length > 1 && (
+                      <div className="text-[10px] text-[var(--text-dim)] mt-1 font-mono truncate">
+                        {caseObj.algorithms.map((a) => a.name).join(' · ')}
+                      </div>
+                    )}
                   </div>
 
                   <button
