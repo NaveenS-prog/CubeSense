@@ -11,6 +11,7 @@ import {
   Minimize2,
   X,
   Settings,
+  Cloud,
 } from 'lucide-react';
 import { generateScramble, CUBE_EVENTS } from '../utils/scramble';
 import { formatTime, computeStats } from '../utils/timerStats';
@@ -32,7 +33,7 @@ const INSPECTION_LIMIT_MS = 15000;
 const INSPECTION_DNF_MS = 17000;
 const HOLD_TO_START_MS = 300;
 
-function SmartTimer({ session, practiceCase, onExitPractice }) {
+function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
   const {
     sessions,
     activeSession,
@@ -494,6 +495,32 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
             >
               + Session
             </button>
+
+            {onOpenAuth && (
+              <button
+                type="button"
+                className={`toolbar-btn flex items-center gap-1.5 ${
+                  session?.user
+                    ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                    : 'text-[var(--text-secondary)] hover:text-white'
+                }`}
+                onClick={onOpenAuth}
+                title={
+                  session?.user
+                    ? `Cloud Sync Active (${session.user.email})`
+                    : 'Sign In to sync solves with Supabase cloud'
+                }
+              >
+                <Cloud
+                  className={`w-3.5 h-3.5 ${
+                    session?.user ? 'text-emerald-400' : 'text-[var(--text-muted)]'
+                  }`}
+                />
+                <span className="text-[11px] font-medium hidden sm:inline">
+                  {session?.user ? 'Synced' : 'Cloud Sync'}
+                </span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 ml-auto">

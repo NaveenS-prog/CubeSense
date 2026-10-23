@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import SmartTimer from './components/SmartTimer';
 import AlgoTrainer from './components/AlgoTrainer';
 import AlgoTeacher from './components/AlgoTeacher';
-import AuthPanel from './components/AuthPanel';
+import AuthModal from './components/AuthModal';
 import Sidebar from './components/layout/Sidebar';
 import ResetPassword from './components/ResetPassword';
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient';
@@ -14,6 +14,7 @@ function App() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   if (window.location.pathname === '/reset-password') {
     return <ResetPassword />;
@@ -81,7 +82,9 @@ function App() {
         onTabChange={setActiveTab}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+        session={session}
         profile={profile}
+        onOpenAuth={() => setAuthModalOpen(true)}
         onSignOut={isSupabaseConfigured && session ? handleSignOut : null}
       />
 
@@ -91,6 +94,7 @@ function App() {
             session={session}
             practiceCase={practiceCase}
             onExitPractice={() => setPracticeCase(null)}
+            onOpenAuth={() => setAuthModalOpen(true)}
           />
         )}
         {activeTab === 'trainer' && (
@@ -120,6 +124,15 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* Cloud Authentication Modal (Google OAuth & Email/Password) */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        session={session}
+        profile={profile}
+        onProfileSaved={setProfile}
+      />
     </div>
   );
 }

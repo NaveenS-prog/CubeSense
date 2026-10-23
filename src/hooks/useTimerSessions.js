@@ -3,9 +3,24 @@ import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
 
 const LEGACY_SESSION_ID = 'legacy-default';
 
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+function isValidUUID(str) {
+  return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+}
+
 function createSessionMeta(name) {
   return {
-    id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+    id: generateUUID(),
     name,
     createdAt: new Date().toISOString(),
   };
@@ -83,7 +98,17 @@ export function useTimerSessions(authSession) {
   }, [persistLocal]);
 
   const loadFromLocal = useCallback(() => {
-    const stored = readLocal(userId);
+    let stored = readLocal(userId);
+
+    // If signed in, but no user solves exist yet, check guest storage and migrate them
+    if (userId && (!stored || !stored.sessions?.length)) {
+      const guestStored = readLocal('guest');
+      if (guestStored?.sessions?.length) {
+        stored = guestStored;
+        writeLocal(userId, guestStored);
+      }
+    }
+
     if (stored?.sessions?.length) {
       const sid = stored.activeSessionId || stored.sessions[0].id;
       applySessionState(
@@ -102,15 +127,18 @@ export function useTimerSessions(authSession) {
   }, [userId, applySessionState]);
 
   const fetchCloudSolves = useCallback(async (sessionId, includeLegacy = true) => {
+    if (!isSupabaseConfigured || !userId) return { data: [], error: null };
+
     let query = supabase
       .from('solves')
       .select('id, type, raw_time_ms, final_time_ms, penalty, scramble, solved_at, session_id')
       .eq('user_id', userId)
       .order('solved_at', { ascending: false });
 
-    if (sessionId && includeLegacy) {
+    const hasValidUuid = isValidUUID(sessionId);
+    if (hasValidUuid && includeLegacy) {
       query = query.or(`session_id.eq.${sessionId},session_id.is.null`);
-    } else if (sessionId) {
+    } else if (hasValidUuid) {
       query = query.eq('session_id', sessionId);
     }
 
@@ -378,19 +406,32 @@ export function useTimerSessions(authSession) {
   }, [sessions, userId, cloudSessionsEnabled, applySessionState]);
 
   const addSolve = useCallback(async (record) => {
+    let currentSessionId = activeSessionId;
+    let currentSessions = sessions;
+
+    if (!currentSessionId || !currentSessions.length) {
+      const defaultSession = createSessionMeta('New Session');
+      currentSessions = [defaultSession];
+      currentSessionId = defaultSession.id;
+      setSessions(currentSessions);
+      setActiveSessionId(currentSessionId);
+    }
+
+    const localId = generateUUID();
     const recordWithMeta = {
       ...record,
-      localId: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
-      solvedAt: new Date().toISOString(),
-      sessionId: activeSessionId,
+      id: record.id || localId,
+      localId,
+      solvedAt: record.solvedAt || new Date().toISOString(),
+      sessionId: currentSessionId,
     };
 
     setSolves((prev) => {
       const next = [recordWithMeta, ...prev];
       const local = readLocal(userId) || { solvesBySession: {} };
-      persistLocal(sessions, activeSessionId, {
-        ...local.solvesBySession,
-        [activeSessionId]: next,
+      persistLocal(currentSessions, currentSessionId, {
+        ...(local.solvesBySession || {}),
+        [currentSessionId]: next,
       });
       return next;
     });
@@ -401,16 +442,16 @@ export function useTimerSessions(authSession) {
 
     const insertPayload = {
       user_id: userId,
-      type: record.type,
+      type: record.type || 'solve',
       raw_time_ms: Number.isFinite(record.time) ? Math.round(record.time) : null,
       final_time_ms: Number.isFinite(record.finalTime) ? Math.round(record.finalTime) : null,
-      penalty: record.penalty,
-      scramble: record.scramble,
+      penalty: record.penalty || null,
+      scramble: record.scramble || '',
       solved_at: recordWithMeta.solvedAt,
     };
 
-    if (cloudSessionsEnabled && activeSessionId && activeSessionId !== LEGACY_SESSION_ID) {
-      insertPayload.session_id = activeSessionId;
+    if (cloudSessionsEnabled && isValidUUID(currentSessionId) && currentSessionId !== LEGACY_SESSION_ID) {
+      insertPayload.session_id = currentSessionId;
     }
 
     let { data, error } = await supabase
@@ -436,11 +477,11 @@ export function useTimerSessions(authSession) {
 
     const saved = dbRowToRecord(data);
     setSolves((prev) => {
-      const next = [saved, ...prev.filter((item) => item.localId !== recordWithMeta.localId)];
+      const next = [saved, ...prev.filter((item) => item.localId !== localId && item.id !== localId)];
       const local = readLocal(userId) || { solvesBySession: {} };
-      persistLocal(sessions, activeSessionId, {
-        ...local.solvesBySession,
-        [activeSessionId]: next,
+      persistLocal(currentSessions, currentSessionId, {
+        ...(local.solvesBySession || {}),
+        [currentSessionId]: next,
       });
       return next;
     });
