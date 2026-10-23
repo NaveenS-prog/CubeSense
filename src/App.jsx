@@ -6,6 +6,7 @@ import AuthModal from './components/AuthModal';
 import Sidebar from './components/layout/Sidebar';
 import ResetPassword from './components/ResetPassword';
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient';
+import { authService } from './lib/authService';
 import { invertAlgorithm } from './utils/cubeSimulator';
 
 function App() {
@@ -21,24 +22,36 @@ function App() {
   }
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return undefined;
+    let isMounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    authService.getSession().then((currSession) => {
+      if (isMounted && currSession) {
+        setSession(currSession);
+        if (currSession.user?.user_metadata?.username) {
+          setProfile({ username: currSession.user.user_metadata.username, id: currSession.user.id });
+        }
+      }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
+    const sub = authService.onAuthStateChange((_event, nextSession) => {
+      if (isMounted) {
+        setSession(nextSession);
+        if (nextSession?.user?.user_metadata?.username) {
+          setProfile({ username: nextSession.user.user_metadata.username, id: nextSession.user.id });
+        } else if (!nextSession) {
+          setProfile(null);
+        }
+      }
     });
 
     return () => {
-      listener.subscription.unsubscribe();
+      isMounted = false;
+      sub.unsubscribe();
     };
   }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !session?.user) {
-      setProfile(null);
       return;
     }
 
@@ -55,11 +68,12 @@ function App() {
 
       if (error) {
         console.warn('Unable to load profile:', error);
-        setProfile(null);
         return;
       }
 
-      setProfile(data);
+      if (data) {
+        setProfile(data);
+      }
     };
 
     loadProfile();
@@ -70,9 +84,9 @@ function App() {
   }, [session]);
 
   const handleSignOut = async () => {
-    if (isSupabaseConfigured) {
-      await supabase.auth.signOut();
-    }
+    await authService.signOut();
+    setSession(null);
+    setProfile(null);
   };
 
   return (
@@ -85,7 +99,7 @@ function App() {
         session={session}
         profile={profile}
         onOpenAuth={() => setAuthModalOpen(true)}
-        onSignOut={isSupabaseConfigured && session ? handleSignOut : null}
+        onSignOut={session ? handleSignOut : null}
       />
 
       <div className="app-content">

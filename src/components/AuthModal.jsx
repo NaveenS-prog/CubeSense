@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, configureSupabaseCredentials } from '../lib/supabaseClient';
+import { authService } from '../lib/authService';
 
 export default function AuthModal({ isOpen, onClose, session, profile, onProfileSaved }) {
   const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'forgot' | 'settings'
@@ -53,27 +54,21 @@ export default function AuthModal({ isOpen, onClose, session, profile, onProfile
 
   // 1. Google OAuth Sign-In
   const handleGoogleSignIn = async () => {
-    if (!isSupabaseConfigured) {
-      setErrorMsg('Supabase is not connected yet. Please configure your project URL and Anon key below.');
-      setMode('settings');
-      return;
-    }
-
     setIsBusy(true);
     setErrorMsg('');
     setSuccessMsg('');
 
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-        },
-      });
-
-      if (error) throw error;
+      await authService.signInWithGoogle();
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to authenticate with Google.');
+      if (err.message === 'SUPABASE_NOT_CONFIGURED') {
+        setErrorMsg(
+          'Google OAuth requires your Supabase Project URL and Public Anon Key. Please paste them below to enable Google Sign-In and Cloud Sync.'
+        );
+        setMode('settings');
+      } else {
+        setErrorMsg(err.message || 'Failed to authenticate with Google.');
+      }
       setIsBusy(false);
     }
   };
@@ -82,36 +77,24 @@ export default function AuthModal({ isOpen, onClose, session, profile, onProfile
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!isSupabaseConfigured) {
-      setErrorMsg('Supabase is not connected. Enter your Supabase credentials below.');
-      setMode('settings');
-      return;
-    }
-
     setIsBusy(true);
     setErrorMsg('');
     setSuccessMsg('');
 
     try {
       if (mode === 'forgot') {
-        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: `${window.location.origin}/reset-password`,
-        });
-        if (error) throw error;
+        await authService.resetPassword(email.trim());
         setSuccessMsg('Password reset link sent! Please check your email inbox.');
       } else if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await authService.signUp({
           email: email.trim(),
           password,
-          options: {
-            data: { username: username.trim() },
-          },
+          username: username.trim(),
         });
 
         if (error) throw error;
 
-        // Save profile username if user was created
-        if (data.user && username.trim()) {
+        if (data?.user && username.trim() && isSupabaseConfigured) {
           try {
             await supabase.from('profiles').upsert({
               id: data.user.id,
@@ -124,21 +107,17 @@ export default function AuthModal({ isOpen, onClose, session, profile, onProfile
           }
         }
 
-        if (data.session) {
-          setSuccessMsg('Account created successfully! You are now logged in.');
-          setTimeout(() => onClose(), 1200);
-        } else {
-          setSuccessMsg('Account created! Please check your email inbox to confirm your account.');
-        }
+        setSuccessMsg('Account created successfully! You are now signed in.');
+        setTimeout(() => onClose(), 900);
       } else {
         // Login mode
-        const { error } = await supabase.auth.signInWithPassword({
+        const { error } = await authService.signInWithPassword({
           email: email.trim(),
           password,
         });
 
         if (error) throw error;
-        setSuccessMsg('Signed in successfully! Syncing your solves...');
+        setSuccessMsg('Signed in successfully! Loading your solves...');
         setTimeout(() => onClose(), 800);
       }
     } catch (err) {
@@ -165,7 +144,7 @@ export default function AuthModal({ isOpen, onClose, session, profile, onProfile
   const handleSignOut = async () => {
     setIsBusy(true);
     try {
-      await supabase.auth.signOut();
+      await authService.signOut();
       onClose();
     } catch (err) {
       setErrorMsg(err.message);
