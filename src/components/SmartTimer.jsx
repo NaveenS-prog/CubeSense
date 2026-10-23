@@ -503,7 +503,7 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
               onClick={toggleSound}
               title={soundActive ? 'Mute sound effects' : 'Enable sound effects'}
             >
-              {soundActive ? <Volume2 className="w-4 h-4 text-[var(--accent-blue)]" /> : <VolumeX className="w-4 h-4" />}
+              {soundActive ? <Volume2 className="w-4 h-4 text-white" /> : <VolumeX className="w-4 h-4" />}
             </button>
 
             <button
@@ -512,7 +512,7 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
               onClick={() => setShowVisualizer((v) => !v)}
               title="Toggle 2D Scramble Net Visualizer"
             >
-              {showVisualizer ? <EyeOff className="w-4 h-4 text-[var(--accent-blue)]" /> : <Eye className="w-4 h-4" />}
+              {showVisualizer ? <EyeOff className="w-4 h-4 text-white" /> : <Eye className="w-4 h-4" />}
             </button>
 
             <button
@@ -530,13 +530,13 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
         {practiceCase && (
           <div className="practice-banner">
             <div className="practice-info">
-              <span className="practice-tag">🎯 Practice Mode</span>
+              <span className="practice-tag">Practice Mode</span>
               <span className="font-semibold text-white">{practiceCase.name}</span>
-              <span className="text-xs text-[var(--text-muted)] font-mono">({practiceCase.notation})</span>
+              <span className="text-xs text-[var(--text-secondary)] font-mono">({practiceCase.notation})</span>
             </div>
             {onExitPractice && (
               <button type="button" className="practice-exit-btn" onClick={onExitPractice}>
-                <X className="w-3.5 h-3.5 mr-1" /> Exit Practice
+                <X className="w-3.5 h-3.5 mr-1" /> Exit
               </button>
             )}
           </div>
@@ -552,7 +552,7 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
               onClick={copyScramble}
               title="Copy scramble"
             >
-              {copiedScramble ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+              {copiedScramble ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
             </button>
             <button
               type="button"
@@ -568,7 +568,7 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
           {/* Collapsible 2D Unfolded Scramble Net */}
           {showVisualizer && (
             <div className="scramble-visualizer-box">
-              <div className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+              <div className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
                 Scramble Verification Net
               </div>
               <CubeNetVisualizer scramble={scramble} size={160} />
@@ -581,10 +581,10 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
           <div className={`timer-display-large ${statusClass}`}>{displayLabel()}</div>
           <div className="timer-status-text">{statusText}</div>
           {warningText && (timerStatus === 'inspection' || timerStatus === 'holding' || timerStatus === 'ready') && (
-            <div className="timer-warning text-red-400 font-bold animate-bounce">{warningText}</div>
+            <div className="timer-warning text-red-400 font-semibold">{warningText}</div>
           )}
           {inspectionPenalty === '+2' && (
-            <div className="timer-warning">+2 inspection penalty applied</div>
+            <div className="timer-warning text-amber-400 font-semibold">+2 inspection penalty applied</div>
           )}
         </div>
 

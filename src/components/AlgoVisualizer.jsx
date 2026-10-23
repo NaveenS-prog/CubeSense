@@ -251,79 +251,72 @@ export default function AlgoVisualizer({ caseObj, size = 96, className = '' }) {
       height={size}
       className={`algo-diagram select-none ${className}`}
     >
-      <defs>
-        <filter id="f2l-glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="#10b981" floodOpacity="0.6"/>
-        </filter>
-      </defs>
-
       {/* Isometric Cube Representation */}
       {/* Top Face (tilted parallelogram) */}
       <polygon
         points="50,14 80,30 50,46 20,30"
-        fill="#1e293b"
-        stroke="#475569"
-        strokeWidth="1.2"
+        fill="#1e222b"
+        stroke="#333947"
+        strokeWidth="1"
       />
       {/* Top grid lines */}
-      <line x1="40" y1="19.3" x2="30" y2="35.3" stroke="#334155" strokeWidth="1" />
-      <line x1="60" y1="19.3" x2="70" y2="35.3" stroke="#334155" strokeWidth="1" />
-      <line x1="30" y1="24.7" x2="60" y2="40.7" stroke="#334155" strokeWidth="1" />
-      <line x1="40" y1="30" x2="70" y2="24.7" stroke="#334155" strokeWidth="1" />
+      <line x1="40" y1="19.3" x2="30" y2="35.3" stroke="#252a36" strokeWidth="1" />
+      <line x1="60" y1="19.3" x2="70" y2="35.3" stroke="#252a36" strokeWidth="1" />
+      <line x1="30" y1="24.7" x2="60" y2="40.7" stroke="#252a36" strokeWidth="1" />
+      <line x1="40" y1="30" x2="70" y2="24.7" stroke="#252a36" strokeWidth="1" />
 
       {/* Front Face (left-angled vertical surface) */}
       <polygon
         points="20,30 50,46 50,84 20,68"
-        fill="#0f172a"
-        stroke="#475569"
-        strokeWidth="1.2"
+        fill="#14171d"
+        stroke="#333947"
+        strokeWidth="1"
       />
       {/* Front layer lines */}
-      <line x1="30" y1="35.3" x2="30" y2="73.3" stroke="#1e293b" strokeWidth="1" />
-      <line x1="40" y1="40.7" x2="40" y2="78.7" stroke="#1e293b" strokeWidth="1" />
-      <line x1="20" y1="42.7" x2="50" y2="58.7" stroke="#1e293b" strokeWidth="1" />
-      <line x1="20" y1="55.3" x2="50" y2="71.3" stroke="#1e293b" strokeWidth="1" />
+      <line x1="30" y1="35.3" x2="30" y2="73.3" stroke="#202530" strokeWidth="1" />
+      <line x1="40" y1="40.7" x2="40" y2="78.7" stroke="#202530" strokeWidth="1" />
+      <line x1="20" y1="42.7" x2="50" y2="58.7" stroke="#202530" strokeWidth="1" />
+      <line x1="20" y1="55.3" x2="50" y2="71.3" stroke="#202530" strokeWidth="1" />
 
       {/* Right Face (right-angled vertical surface) */}
       <polygon
         points="50,46 80,30 80,68 50,84"
-        fill="#0b1120"
-        stroke="#475569"
-        strokeWidth="1.2"
+        fill="#101217"
+        stroke="#333947"
+        strokeWidth="1"
       />
       {/* Right layer lines */}
-      <line x1="60" y1="40.7" x2="60" y2="78.7" stroke="#1e293b" strokeWidth="1" />
-      <line x1="70" y1="35.3" x2="70" y2="73.3" stroke="#1e293b" strokeWidth="1" />
-      <line x1="50" y1="58.7" x2="80" y2="42.7" stroke="#1e293b" strokeWidth="1" />
-      <line x1="50" y1="71.3" x2="80" y2="55.3" stroke="#1e293b" strokeWidth="1" />
+      <line x1="60" y1="40.7" x2="60" y2="78.7" stroke="#202530" strokeWidth="1" />
+      <line x1="70" y1="35.3" x2="70" y2="73.3" stroke="#202530" strokeWidth="1" />
+      <line x1="50" y1="58.7" x2="80" y2="42.7" stroke="#202530" strokeWidth="1" />
+      <line x1="50" y1="71.3" x2="80" y2="55.3" stroke="#202530" strokeWidth="1" />
 
       {/* Highlight Target FR Slot (Front-Right corner + middle edge) */}
       <polygon
         points="40,53.3 50,58.7 50,84 40,78.7"
-        fill="rgba(16, 185, 129, 0.35)"
+        fill="rgba(16, 185, 129, 0.25)"
         stroke="#10b981"
-        strokeWidth="1.8"
-        filter="url(#f2l-glow)"
+        strokeWidth="1.5"
       />
       <polygon
         points="50,58.7 60,53.3 60,78.7 50,84"
-        fill="rgba(6, 182, 212, 0.35)"
-        stroke="#06b6d4"
-        strokeWidth="1.8"
+        fill="rgba(16, 185, 129, 0.15)"
+        stroke="#10b981"
+        strokeWidth="1.5"
       />
 
       {/* FR Slot Target indicator text badge */}
-      <rect x="36" y="86" width="28" height="11" rx="3" fill="#10b981" />
+      <rect x="37" y="87" width="26" height="10" rx="3" fill="#181b22" stroke="#333947" strokeWidth="1" />
       <text
         x="50"
         y="94.5"
         textAnchor="middle"
-        fontSize="7.5"
-        fontWeight="800"
-        fill="#041f14"
+        fontSize="7"
+        fontWeight="700"
+        fill="#ededee"
         fontFamily="sans-serif"
       >
-        FR
+        FR SLOT
       </text>
 
       {/* Active U-layer piece indicator dot */}

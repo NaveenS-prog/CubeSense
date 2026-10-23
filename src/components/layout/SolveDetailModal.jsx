@@ -37,8 +37,8 @@ export default function SolveDetailModal({
       <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-[var(--accent-blue)]">Solve #{solveNumber}</span>
-            {solve.date && <span className="text-xs text-[var(--text-muted)]">· {solve.date}</span>}
+            <span className="text-sm font-semibold text-[var(--text-primary)]">Solve #{solveNumber}</span>
+            {solve.date && <span className="text-xs text-[var(--text-secondary)]">· {solve.date}</span>}
           </div>
           <button type="button" className="icon-btn" onClick={onClose}>
             <X className="w-4 h-4" />
@@ -48,7 +48,7 @@ export default function SolveDetailModal({
         <div className="modal-body">
           {/* Main Time Display */}
           <div className="text-center my-3">
-            <div className={`text-4xl font-mono font-bold ${isDnf ? 'text-red-500' : 'text-[var(--solve-green)]'}`}>
+            <div className={`text-4xl font-mono font-medium ${isDnf ? 'text-rose-400' : 'text-[var(--state-ready)]'}`}>
               {isDnf ? 'DNF' : formatTime(solve.finalTime ?? solve.time)}
             </div>
             {isPlus2 && (
@@ -62,20 +62,20 @@ export default function SolveDetailModal({
           {solve.scramble && (
             <div className="scramble-modal-section">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
                   Scramble
                 </span>
                 <button
                   type="button"
-                  className="text-xs flex items-center gap-1 text-[var(--accent-blue)] hover:underline"
+                  className="text-xs flex items-center gap-1 text-[var(--text-primary)] hover:underline"
                   onClick={handleCopyScramble}
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
 
-              <div className="font-mono text-xs bg-[var(--bg-app)] p-2.5 rounded border border-[var(--border-subtle)] text-[var(--text-light)] select-all leading-relaxed">
+              <div className="font-mono text-xs bg-[var(--bg-input)] p-2.5 rounded border border-[var(--border-base)] text-[var(--text-primary)] select-all leading-relaxed">
                 {solve.scramble}
               </div>
 
@@ -90,14 +90,14 @@ export default function SolveDetailModal({
           <div className="modal-actions-grid mt-4">
             <button
               type="button"
-              className={`secondary-button flex-1 justify-center ${isPlus2 ? 'border-amber-400 text-amber-400' : ''}`}
+              className={`drill-action-btn secondary flex-1 ${isPlus2 ? 'border-amber-400 text-amber-400' : ''}`}
               onClick={() => onApplyPenalty(solve, isPlus2 ? null : '+2')}
             >
               +2 sec
             </button>
             <button
               type="button"
-              className={`secondary-button flex-1 justify-center ${isDnf ? 'border-red-500 text-red-500' : ''}`}
+              className={`drill-action-btn secondary flex-1 ${isDnf ? 'border-rose-400 text-rose-400' : ''}`}
               onClick={() => onApplyPenalty(solve, isDnf ? null : 'DNF')}
             >
               DNF
@@ -105,7 +105,7 @@ export default function SolveDetailModal({
             {onLoadScramble && solve.scramble && (
               <button
                 type="button"
-                className="secondary-button flex-1 justify-center gap-1.5"
+                className="drill-action-btn secondary flex-1 gap-1.5"
                 onClick={() => {
                   onLoadScramble(solve.scramble);
                   onClose();
@@ -117,7 +117,7 @@ export default function SolveDetailModal({
             )}
             <button
               type="button"
-              className="secondary-button text-red-400 border-red-500/30 hover:bg-red-500/10 justify-center"
+              className="drill-action-btn secondary text-rose-400 hover:border-rose-400/50 w-10 flex-none"
               onClick={() => {
                 onDelete(solve);
                 onClose();
