@@ -1,6 +1,7 @@
 /**
  * Complete 41 F2L (First Two Layers) Speedcubing Algorithms Database
  * Standard Fridrich CFOP Method for Front-Right (FR) Slot
+ * Includes detailed 3D sticker layout data and setup scrambles for authentic visualizer rendering.
  */
 
 export const F2L_CASES = [
@@ -15,6 +16,11 @@ export const F2L_CASES = [
     description: 'Corner and edge are already paired up; insert directly into front-right slot.',
     triggers: ['U', 'Sexy Insert'],
     slot: 'FR',
+    setupScramble: "R U R' U'",
+    visual: {
+      corner: { pos: 'UFR', U: 'red', F: 'green', R: 'white' },
+      edge: { pos: 'UR', U: 'green', R: 'red' },
+    },
   },
   {
     id: 'f2l-2',
@@ -26,6 +32,11 @@ export const F2L_CASES = [
     description: 'Pair connected on the left side, insert into target slot with rotation or F moves.',
     triggers: ['y\'', 'Left Insert'],
     slot: 'FR',
+    setupScramble: "F' U' F",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'white', R: 'red' },
+      edge: { pos: 'UF', U: 'red', F: 'green' },
+    },
   },
   {
     id: 'f2l-3',
@@ -37,6 +48,11 @@ export const F2L_CASES = [
     description: 'Corner and edge separate in top layer; pair up and insert.',
     triggers: ['Setup', 'Insert'],
     slot: 'FR',
+    setupScramble: "R U R' U2 R U' R' U",
+    visual: {
+      corner: { pos: 'UFR', U: 'red', F: 'green', R: 'white' },
+      edge: { pos: 'UL', U: 'green', L: 'red' },
+    },
   },
   {
     id: 'f2l-4',
@@ -48,6 +64,11 @@ export const F2L_CASES = [
     description: 'Mirror of Case 3 with corner and edge ready to pair on the left.',
     triggers: ['Left Setup', 'Insert'],
     slot: 'FR',
+    setupScramble: "F' U' F U2 F' U F U'",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'white', R: 'red' },
+      edge: { pos: 'UB', U: 'red', B: 'green' },
+    },
   },
 
   // --- Group 2: Corner in U, Edge in U (Cases 5 - 24) ---
@@ -61,6 +82,11 @@ export const F2L_CASES = [
     description: 'White facing right, top colors match. Hide corner, position edge, pair up.',
     triggers: ['R U\' R\'', 'R U R\''],
     slot: 'FR',
+    setupScramble: "R U' R' U' R U R' U",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'red', R: 'white' },
+      edge: { pos: 'UL', U: 'green', L: 'red' },
+    },
   },
   {
     id: 'f2l-6',
@@ -72,6 +98,11 @@ export const F2L_CASES = [
     description: 'White facing front, top colors match. Mirror of case 5.',
     triggers: ['L\' U L', 'L\' U\' L'],
     slot: 'FR',
+    setupScramble: "F' U F U F' U' F U'",
+    visual: {
+      corner: { pos: 'UFR', U: 'red', F: 'white', R: 'green' },
+      edge: { pos: 'UB', U: 'red', B: 'green' },
+    },
   },
   {
     id: 'f2l-7',
@@ -83,6 +114,11 @@ export const F2L_CASES = [
     description: 'Opposite top colors, single trigger directly pairs and inserts.',
     triggers: ['Direct Trigger'],
     slot: 'FR',
+    setupScramble: "R U R'",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'red', R: 'white' },
+      edge: { pos: 'UF', U: 'red', F: 'green' },
+    },
   },
   {
     id: 'f2l-8',
@@ -94,6 +130,11 @@ export const F2L_CASES = [
     description: 'Mirror of case 7: single left trigger pairs and solves the slot.',
     triggers: ['Left Trigger'],
     slot: 'FR',
+    setupScramble: "F' U F",
+    visual: {
+      corner: { pos: 'UFR', U: 'red', F: 'white', R: 'green' },
+      edge: { pos: 'UR', U: 'green', R: 'red' },
+    },
   },
   {
     id: 'f2l-9',
@@ -105,6 +146,11 @@ export const F2L_CASES = [
     description: 'White sticker on right, top colors different. Reposition and insert.',
     triggers: ['R\' U\' R', 'Insert'],
     slot: 'FR',
+    setupScramble: "R' U' R U2 R' U R U'",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'red', R: 'white' },
+      edge: { pos: 'UB', U: 'red', B: 'green' },
+    },
   },
   {
     id: 'f2l-10',
@@ -116,6 +162,11 @@ export const F2L_CASES = [
     description: 'White sticker facing front, top colors different.',
     triggers: ['Setup', 'Sexy Insert'],
     slot: 'FR',
+    setupScramble: "R U R' U2 R U' R' U",
+    visual: {
+      corner: { pos: 'UFR', U: 'red', F: 'white', R: 'green' },
+      edge: { pos: 'UL', U: 'green', L: 'red' },
+    },
   },
   {
     id: 'f2l-11',
@@ -127,6 +178,11 @@ export const F2L_CASES = [
     description: 'Pieces are attached together backwards in U layer; separate and insert.',
     triggers: ['Split Pair', 'Insert'],
     slot: 'FR',
+    setupScramble: "R U R' U2 R U2 R' U",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'red', R: 'white' },
+      edge: { pos: 'UF', U: 'green', F: 'red' },
+    },
   },
   {
     id: 'f2l-12',
@@ -138,17 +194,27 @@ export const F2L_CASES = [
     description: 'Mirror of Case 11 for left orientation.',
     triggers: ['Left Split', 'Left Insert'],
     slot: 'FR',
+    setupScramble: "R' U' R U2 R' U2 R d'",
+    visual: {
+      corner: { pos: 'UFR', U: 'red', F: 'white', R: 'green' },
+      edge: { pos: 'UR', U: 'red', R: 'green' },
+    },
   },
   {
     id: 'f2l-13',
     number: 13,
     name: 'F2L 13 (Adjacent Trapped, Same Color)',
     category: 'Corner & Edge in U',
-    notation: "y' U' L' U2 L U' y R U R'",
-    alternative: "U' R U' R' U2 R U R'",
+    notation: "U' R U' R' U2 R U R'",
+    alternative: "y' U' L' U2 L U' y R U R'",
     description: 'Attached pieces requiring rotation or double top turns.',
-    triggers: ['Regrip / Sledge'],
+    triggers: ['R U\' R\'', 'U2 R U R\''],
     slot: 'FR',
+    setupScramble: "R U' R' U2 R U R' U",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'red', R: 'white' },
+      edge: { pos: 'UR', U: 'green', R: 'red' },
+    },
   },
   {
     id: 'f2l-14',
@@ -160,6 +226,11 @@ export const F2L_CASES = [
     description: 'Mirror of Case 13 with right hand setup.',
     triggers: ['Setup', 'Left Insert'],
     slot: 'FR',
+    setupScramble: "R' U R y U' R U2 R' U'",
+    visual: {
+      corner: { pos: 'UFR', U: 'red', F: 'white', R: 'green' },
+      edge: { pos: 'UF', U: 'red', F: 'green' },
+    },
   },
   {
     id: 'f2l-15',
@@ -171,6 +242,11 @@ export const F2L_CASES = [
     description: 'Corner and edge stuck together with opposite orientation; 3-stage trigger.',
     triggers: ['Separate', 'Pair', 'Insert'],
     slot: 'FR',
+    setupScramble: "R U' R' U R U' R' U2 R U' R'",
+    visual: {
+      corner: { pos: 'UFR', U: 'red', F: 'white', R: 'green' },
+      edge: { pos: 'UR', U: 'green', R: 'red' },
+    },
   },
   {
     id: 'f2l-16',
@@ -182,6 +258,11 @@ export const F2L_CASES = [
     description: 'Mirror of Case 15 using left hand triggers.',
     triggers: ['Left 3-Stage'],
     slot: 'FR',
+    setupScramble: "F' U F U' F' U F U2 F' U F",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'red', R: 'white' },
+      edge: { pos: 'UF', U: 'red', F: 'green' },
+    },
   },
   {
     id: 'f2l-17',
@@ -193,6 +274,11 @@ export const F2L_CASES = [
     description: 'Corner white facing right, edge near right side; pair via U2 and insert.',
     triggers: ['R U2 R\'', 'R U R\''],
     slot: 'FR',
+    setupScramble: "R U' R' U R U2 R'",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'red', R: 'white' },
+      edge: { pos: 'UB', U: 'green', B: 'red' },
+    },
   },
   {
     id: 'f2l-18',
@@ -204,6 +290,11 @@ export const F2L_CASES = [
     description: 'Mirror of Case 17: corner white facing front, edge near front side.',
     triggers: ['L\' U2 L', 'L\' U\' L'],
     slot: 'FR',
+    setupScramble: "F' U F U' F' U2 F",
+    visual: {
+      corner: { pos: 'UFR', U: 'red', F: 'white', R: 'green' },
+      edge: { pos: 'UL', U: 'red', L: 'green' },
+    },
   },
   {
     id: 'f2l-19',
@@ -215,6 +306,11 @@ export const F2L_CASES = [
     description: 'Corner and edge separated at 180 degrees.',
     triggers: ['U2 Split', 'Insert'],
     slot: 'FR',
+    setupScramble: "R U R' U' R U2 R' U'",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'red', R: 'white' },
+      edge: { pos: 'UR', U: 'red', R: 'green' },
+    },
   },
   {
     id: 'f2l-20',
@@ -226,6 +322,11 @@ export const F2L_CASES = [
     description: 'Mirror of Case 19 on opposite side.',
     triggers: ['Left U2 Split', 'Left Insert'],
     slot: 'FR',
+    setupScramble: "F' U' F U F' U2 F U",
+    visual: {
+      corner: { pos: 'UFR', U: 'red', F: 'white', R: 'green' },
+      edge: { pos: 'UF', U: 'green', F: 'red' },
+    },
   },
   {
     id: 'f2l-21',
@@ -237,6 +338,11 @@ export const F2L_CASES = [
     description: 'Corner and edge separated at diagonally opposite slots.',
     triggers: ['U2 Pair', 'Insert'],
     slot: 'FR',
+    setupScramble: "R U R' U' R U' R' U2",
+    visual: {
+      corner: { pos: 'UFL', U: 'red', F: 'green', L: 'white' },
+      edge: { pos: 'UR', U: 'red', R: 'green' },
+    },
   },
   {
     id: 'f2l-22',
@@ -248,6 +354,11 @@ export const F2L_CASES = [
     description: 'Rotationless F move solution or standard left mirror.',
     triggers: ['F\' L\' U2 L F'],
     slot: 'FR',
+    setupScramble: "F' L' U2 L F",
+    visual: {
+      corner: { pos: 'UBR', U: 'green', R: 'red', B: 'white' },
+      edge: { pos: 'UF', U: 'green', F: 'red' },
+    },
   },
   {
     id: 'f2l-23',
@@ -259,6 +370,11 @@ export const F2L_CASES = [
     description: 'Sleek ergonomic double layer or R2 speed solution.',
     triggers: ['R2 U2 Trigger'],
     slot: 'FR',
+    setupScramble: "R2 U R' U R U2 R2",
+    visual: {
+      corner: { pos: 'UFL', U: 'red', F: 'white', L: 'green' },
+      edge: { pos: 'UR', U: 'green', R: 'red' },
+    },
   },
   {
     id: 'f2l-24',
@@ -270,6 +386,11 @@ export const F2L_CASES = [
     description: 'Mirror of Case 23.',
     triggers: ['R2 Left Trigger'],
     slot: 'FR',
+    setupScramble: "y R2 U' R U' R' U2 R2 y'",
+    visual: {
+      corner: { pos: 'UBR', U: 'green', R: 'white', B: 'red' },
+      edge: { pos: 'UF', U: 'red', F: 'green' },
+    },
   },
 
   // --- Group 3: Corner White Facing UP (Cases 25 - 30) ---
@@ -283,6 +404,11 @@ export const F2L_CASES = [
     description: 'White on top face; match edge with center, orient corner and insert.',
     triggers: ['U2 Reorient', 'Insert'],
     slot: 'FR',
+    setupScramble: "R U R' U' R U2 R' U'",
+    visual: {
+      corner: { pos: 'UFR', U: 'white', F: 'green', R: 'red' },
+      edge: { pos: 'UL', U: 'red', L: 'green' },
+    },
   },
   {
     id: 'f2l-26',
@@ -294,6 +420,11 @@ export const F2L_CASES = [
     description: 'White on top face; match edge with front center.',
     triggers: ['Left U2', 'Left Insert'],
     slot: 'FR',
+    setupScramble: "F' U' F U F' U2 F U",
+    visual: {
+      corner: { pos: 'UFR', U: 'white', F: 'green', R: 'red' },
+      edge: { pos: 'UB', U: 'green', B: 'red' },
+    },
   },
   {
     id: 'f2l-27',
@@ -305,6 +436,11 @@ export const F2L_CASES = [
     description: 'Corner white up; edge requires positioning to opposite side.',
     triggers: ['Setup', 'Insert'],
     slot: 'FR',
+    setupScramble: "R U R' U' R U' R' U2",
+    visual: {
+      corner: { pos: 'UFR', U: 'white', F: 'green', R: 'red' },
+      edge: { pos: 'UF', U: 'green', F: 'red' },
+    },
   },
   {
     id: 'f2l-28',
@@ -316,6 +452,11 @@ export const F2L_CASES = [
     description: 'Mirror of Case 27.',
     triggers: ['Left Setup', 'Insert'],
     slot: 'FR',
+    setupScramble: "F' U' F U F' U F U2",
+    visual: {
+      corner: { pos: 'UFR', U: 'white', F: 'green', R: 'red' },
+      edge: { pos: 'UR', U: 'red', R: 'green' },
+    },
   },
   {
     id: 'f2l-29',
@@ -327,6 +468,11 @@ export const F2L_CASES = [
     description: 'Quickly forms pair in U layer with R U\' R\' and inserts with R U R\'.',
     triggers: ['R U\' R\'', 'R U R\''],
     slot: 'FR',
+    setupScramble: "R U' R' U2 R U R'",
+    visual: {
+      corner: { pos: 'UFR', U: 'white', F: 'red', R: 'green' },
+      edge: { pos: 'UR', U: 'red', R: 'green' },
+    },
   },
   {
     id: 'f2l-30',
@@ -338,6 +484,11 @@ export const F2L_CASES = [
     description: 'Mirror of Case 29.',
     triggers: ['L\' U L', 'L\' U\' L'],
     slot: 'FR',
+    setupScramble: "F' U' F U2 F' U F",
+    visual: {
+      corner: { pos: 'UFR', U: 'white', F: 'red', R: 'green' },
+      edge: { pos: 'UF', U: 'green', F: 'red' },
+    },
   },
 
   // --- Group 4: Corner in Slot, Edge in U (Cases 31 - 36) ---
@@ -351,6 +502,11 @@ export const F2L_CASES = [
     description: 'Corner is oriented in slot; pop out, marry with edge, and re-insert.',
     triggers: ['Extract', 'Insert'],
     slot: 'FR',
+    setupScramble: "R U R' U2 R U R' U",
+    visual: {
+      corner: { pos: 'DFR', F: 'green', R: 'red' },
+      edge: { pos: 'UL', U: 'green', L: 'red' },
+    },
   },
   {
     id: 'f2l-32',
@@ -362,6 +518,11 @@ export const F2L_CASES = [
     description: 'Corner in slot; edge requires single trigger to connect.',
     triggers: ['Sexy Variant'],
     slot: 'FR',
+    setupScramble: "R U R' U' R U R'",
+    visual: {
+      corner: { pos: 'DFR', F: 'green', R: 'red' },
+      edge: { pos: 'UB', U: 'red', B: 'green' },
+    },
   },
   {
     id: 'f2l-33',
@@ -373,6 +534,11 @@ export const F2L_CASES = [
     description: 'Corner in slot with white facing right; pair up simultaneously while extracting.',
     triggers: ['Extract & Pair', 'Insert'],
     slot: 'FR',
+    setupScramble: "R U' R' U R U R' U'",
+    visual: {
+      corner: { pos: 'DFR', F: 'red', R: 'white' },
+      edge: { pos: 'UL', U: 'green', L: 'red' },
+    },
   },
   {
     id: 'f2l-34',
@@ -384,6 +550,11 @@ export const F2L_CASES = [
     description: 'Extract and pair directly with sexy move variation.',
     triggers: ['R U R\'', 'R U R\''],
     slot: 'FR',
+    setupScramble: "R U' R' U R U' R'",
+    visual: {
+      corner: { pos: 'DFR', F: 'red', R: 'white' },
+      edge: { pos: 'UB', U: 'red', B: 'green' },
+    },
   },
   {
     id: 'f2l-35',
@@ -395,6 +566,11 @@ export const F2L_CASES = [
     description: 'Corner in slot with white facing front.',
     triggers: ['Left Extract', 'Insert'],
     slot: 'FR',
+    setupScramble: "F' U L' U' L U L' U' L F",
+    visual: {
+      corner: { pos: 'DFR', F: 'white', R: 'green' },
+      edge: { pos: 'UB', U: 'green', B: 'red' },
+    },
   },
   {
     id: 'f2l-36',
@@ -406,6 +582,11 @@ export const F2L_CASES = [
     description: 'Pop corner out, rotate d, and insert.',
     triggers: ['R U\' R\'', 'd R\' U R'],
     slot: 'FR',
+    setupScramble: "R' U' R d' R U R'",
+    visual: {
+      corner: { pos: 'DFR', F: 'white', R: 'green' },
+      edge: { pos: 'UL', U: 'red', L: 'green' },
+    },
   },
 
   // --- Group 5: Pieces in Slot (Cases 37 - 41) ---
@@ -419,6 +600,11 @@ export const F2L_CASES = [
     description: 'Edge is trapped inside slot; extract with corner and insert.',
     triggers: ['Extract Edge', 'Solve Pair'],
     slot: 'FR',
+    setupScramble: "R U R' U2 R U' R' U R U R'",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'red', R: 'white' },
+      edge: { pos: 'FR', F: 'green', R: 'red' },
+    },
   },
   {
     id: 'f2l-38',
@@ -430,6 +616,11 @@ export const F2L_CASES = [
     description: 'Edge is stuck backwards in slot.',
     triggers: ['Extract Flipped', 'Reinsert'],
     slot: 'FR',
+    setupScramble: "R' U R y U2 R U R' U R U' R'",
+    visual: {
+      corner: { pos: 'UFR', U: 'green', F: 'red', R: 'white' },
+      edge: { pos: 'FR', F: 'red', R: 'green' },
+    },
   },
   {
     id: 'f2l-39',
@@ -441,6 +632,11 @@ export const F2L_CASES = [
     description: 'Corner and edge are in slot, but corner is twisted.',
     triggers: ['Extract Corner', 'Solve'],
     slot: 'FR',
+    setupScramble: "R' U' R U2 R' U2 R y' U' R U R'",
+    visual: {
+      corner: { pos: 'DFR', F: 'red', R: 'white' },
+      edge: { pos: 'FR', F: 'green', R: 'red' },
+    },
   },
   {
     id: 'f2l-40',
@@ -452,6 +648,11 @@ export const F2L_CASES = [
     description: 'Corner is oriented, but edge is inverted in the slot.',
     triggers: ['Extract & Invert', 'Insert'],
     slot: 'FR',
+    setupScramble: "R U2 R' U R U' R' U R U R'",
+    visual: {
+      corner: { pos: 'DFR', F: 'green', R: 'red' },
+      edge: { pos: 'FR', F: 'red', R: 'green' },
+    },
   },
   {
     id: 'f2l-41',
@@ -463,5 +664,10 @@ export const F2L_CASES = [
     description: 'The ultimate F2L case: both pieces trapped inside slot and flipped. Wide r move speed solution.',
     triggers: ['R U\' R\'', 'r U\' r\' U2 r U r\''],
     slot: 'FR',
+    setupScramble: "r U' r' U2 r U r' R U R'",
+    visual: {
+      corner: { pos: 'DFR', F: 'white', R: 'green' },
+      edge: { pos: 'FR', F: 'red', R: 'green' },
+    },
   },
 ];
