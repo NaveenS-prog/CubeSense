@@ -1,4 +1,4 @@
-import { isSupabaseConfigured, supabase } from './supabaseClient';
+import { isSupabaseConfigured, supabase, supabaseUrl, supabaseAnonKey } from './supabaseClient';
 
 const LOCAL_SESSION_KEY = 'cubesense_local_session';
 const LOCAL_USERS_KEY = 'cubesense_local_users';
@@ -103,6 +103,24 @@ export const authService = {
 
   async signInWithGoogle() {
     if (isSupabaseConfigured && supabase) {
+      // Check if Google provider is enabled in the Supabase project to avoid 400 redirect crash
+      try {
+        const settingsRes = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+          headers: { apikey: supabaseAnonKey },
+        });
+        if (settingsRes.ok) {
+          const settings = await settingsRes.json();
+          if (settings.external && settings.external.google === false) {
+            throw new Error('GOOGLE_PROVIDER_NOT_ENABLED');
+          }
+        }
+      } catch (err) {
+        if (err.message === 'GOOGLE_PROVIDER_NOT_ENABLED') {
+          throw err;
+        }
+        // If network fetch fails, continue to signInWithOAuth
+      }
+
       const res = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

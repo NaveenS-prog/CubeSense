@@ -219,7 +219,19 @@ export default function AuthModal({ isOpen, onClose, session, profile, onProfile
         {errorMsg && (
           <div className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/25 flex items-start gap-2.5 text-xs text-rose-300">
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-            <div className="leading-relaxed">{errorMsg}</div>
+            <div className="leading-relaxed flex-1">
+              <div>{errorMsg}</div>
+              {(errorMsg.includes('Google') || errorMsg.includes('Providers')) && (
+                <a
+                  href="https://supabase.com/dashboard/project/wavykrfrqsqzvthvjnpt/auth/providers"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-2 font-medium text-cyan-400 hover:text-cyan-300 underline"
+                >
+                  Open Supabase Auth Providers <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </div>
           </div>
         )}
 
