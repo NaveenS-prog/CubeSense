@@ -103,12 +103,14 @@ export const authService = {
 
   async signInWithGoogle() {
     if (isSupabaseConfigured && supabase) {
-      return await supabase.auth.signInWithOAuth({
+      const res = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: window.location.origin,
         },
       });
+      if (res?.error) throw res.error;
+      return res;
     }
 
     throw new Error('SUPABASE_NOT_CONFIGURED');

@@ -12,8 +12,11 @@ const getEnvOrStorage = (envKey, storageKey) => {
   }
 };
 
-const supabaseUrl = getEnvOrStorage('VITE_SUPABASE_URL', 'cubesense_supabase_url');
-const supabaseAnonKey = getEnvOrStorage('VITE_SUPABASE_ANON_KEY', 'cubesense_supabase_anon_key');
+const DEFAULT_SUPABASE_URL = 'https://wavykrfrqsqzvthvjnpt.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_8sKDHSZm7U7wVPfu7ODRXg_gyZ_Pn4Z';
+
+const supabaseUrl = getEnvOrStorage('VITE_SUPABASE_URL', 'cubesense_supabase_url') || DEFAULT_SUPABASE_URL;
+const supabaseAnonKey = getEnvOrStorage('VITE_SUPABASE_ANON_KEY', 'cubesense_supabase_anon_key') || DEFAULT_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 

@@ -63,9 +63,16 @@ export default function AuthModal({ isOpen, onClose, session, profile, onProfile
     } catch (err) {
       if (err.message === 'SUPABASE_NOT_CONFIGURED') {
         setErrorMsg(
-          'Google OAuth requires your Supabase Project URL and Public Anon Key. Please paste them below to enable Google Sign-In and Cloud Sync.'
+          'Supabase credentials missing. Please configure your Project URL and Anon Key in Settings.'
         );
         setMode('settings');
+      } else if (
+        err.message?.toLowerCase().includes('not enabled') || 
+        err.message?.toLowerCase().includes('unsupported provider')
+      ) {
+        setErrorMsg(
+          'Google Provider is not enabled in your Supabase dashboard yet. Please go to Supabase Dashboard -> Authentication -> Providers -> Google, toggle it ON, and add your Google Client ID. You can sign in with your email and password below!'
+        );
       } else {
         setErrorMsg(err.message || 'Failed to authenticate with Google.');
       }
@@ -86,29 +93,44 @@ export default function AuthModal({ isOpen, onClose, session, profile, onProfile
         await authService.resetPassword(email.trim());
         setSuccessMsg('Password reset link sent! Please check your email inbox.');
       } else if (mode === 'signup') {
-        const { data, error } = await authService.signUp({
-          email: email.trim(),
-          password,
-          username: username.trim(),
-        });
+        try {
+          const { data, error } = await authService.signUp({
+            email: email.trim(),
+            password,
+            username: username.trim(),
+          });
 
-        if (error) throw error;
+          if (error) throw error;
 
-        if (data?.user && username.trim() && isSupabaseConfigured) {
-          try {
-            await supabase.from('profiles').upsert({
-              id: data.user.id,
-              username: username.trim(),
-              updated_at: new Date().toISOString(),
-            });
-            onProfileSaved?.({ id: data.user.id, username: username.trim() });
-          } catch {
-            // Profile upsert fallback
+          if (data?.user && username.trim() && isSupabaseConfigured) {
+            try {
+              await supabase.from('profiles').upsert({
+                id: data.user.id,
+                username: username.trim(),
+                updated_at: new Date().toISOString(),
+              });
+              onProfileSaved?.({ id: data.user.id, username: username.trim() });
+            } catch {
+              // Profile upsert fallback
+            }
+          }
+
+          if (data?.session) {
+            setSuccessMsg('Account created successfully! You are now signed in.');
+            setTimeout(() => onClose(), 900);
+          } else {
+            setSuccessMsg('Account created! Please check your inbox or sign in below.');
+            setTimeout(() => setMode('login'), 2000);
+          }
+        } catch (signUpErr) {
+          if (signUpErr.message?.toLowerCase().includes('error sending confirmation email')) {
+            setErrorMsg(
+              'Supabase could not send confirmation email. In Supabase Dashboard -> Authentication -> Providers -> Email, turn OFF "Confirm email" to allow instant signups.'
+            );
+          } else {
+            throw signUpErr;
           }
         }
-
-        setSuccessMsg('Account created successfully! You are now signed in.');
-        setTimeout(() => onClose(), 900);
       } else {
         // Login mode
         const { error } = await authService.signInWithPassword({
