@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import SmartTimer from './components/SmartTimer';
+import AlgoTrainer from './components/AlgoTrainer';
 import AlgoTeacher from './components/AlgoTeacher';
 import AuthPanel from './components/AuthPanel';
 import Sidebar from './components/layout/Sidebar';
 import ResetPassword from './components/ResetPassword';
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient';
+import { invertAlgorithm } from './utils/cubeSimulator';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('timer');
+  const [activeTab, setActiveTab] = useState('timer'); // 'timer' | 'trainer' | 'teacher'
   const [practiceCase, setPracticeCase] = useState(null);
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -91,6 +93,21 @@ function App() {
             onExitPractice={() => setPracticeCase(null)}
           />
         )}
+        {activeTab === 'trainer' && (
+          <div className="teacher-page">
+            <AlgoTrainer
+              onSendToMainTimer={(caseObj) => {
+                setPracticeCase({
+                  name: caseObj.name,
+                  category: caseObj.category,
+                  notation: caseObj.notation,
+                  setupScramble: invertAlgorithm(caseObj.notation),
+                });
+                setActiveTab('timer');
+              }}
+            />
+          </div>
+        )}
         {activeTab === 'teacher' && (
           <div className="teacher-page">
             <AlgoTeacher
@@ -98,6 +115,7 @@ function App() {
                 setPracticeCase(caseObj);
                 setActiveTab('timer');
               }}
+              onOpenTrainer={() => setActiveTab('trainer')}
             />
           </div>
         )}

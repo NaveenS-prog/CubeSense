@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Play, Copy, Check, Sparkles, BookOpen } from 'lucide-react';
-import { OLL_CASES, PLL_CASES } from '../data/algorithms';
+import { Search, Play, Copy, Check, Sparkles, BookOpen, ExternalLink, Zap } from 'lucide-react';
+import { F2L_CASES, OLL_CASES, PLL_CASES } from '../data/algorithms';
 import AlgoVisualizer from './AlgoVisualizer';
 import { invertAlgorithm } from '../utils/cubeSimulator';
 
-export default function AlgoTeacher({ onStartPractice }) {
-  const [activeTab, setActiveTab] = useState('2look-oll'); // '2look-oll' | '2look-pll' | 'full-pll'
+export default function AlgoTeacher({ onStartPractice, onOpenTrainer }) {
+  const [activeTab, setActiveTab] = useState('full-pll'); // 'f2l' | 'full-oll' | 'full-pll' | '2look-oll' | '2look-pll'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCase, setSelectedCase] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
@@ -13,8 +13,14 @@ export default function AlgoTeacher({ onStartPractice }) {
   // Compute cases for current tab
   const cases = useMemo(() => {
     let list = [];
-    if (activeTab === '2look-oll') {
+    if (activeTab === 'f2l') {
+      list = F2L_CASES;
+    } else if (activeTab === 'full-oll') {
       list = OLL_CASES;
+    } else if (activeTab === 'full-pll') {
+      list = PLL_CASES;
+    } else if (activeTab === '2look-oll') {
+      list = OLL_CASES.filter((c) => c.is2Look);
     } else if (activeTab === '2look-pll') {
       list = PLL_CASES.filter((c) => c.is2Look);
     } else {
@@ -63,11 +69,22 @@ export default function AlgoTeacher({ onStartPractice }) {
     <div className="teacher-container">
       {/* Header & Description */}
       <div className="teacher-header">
-        <div>
-          <h1 className="teacher-title">Algorithm Trainer</h1>
-          <p className="teacher-subtitle">
-            Master CFOP Last Layer with visual diagrams, algorithms, and real inverted setup scrambles.
-          </p>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="teacher-title">CFOP Algorithm Reference</h1>
+            <p className="teacher-subtitle">
+              Comprehensive reference of 41 F2L, 57 OLL, and 21 PLL speedcubing algorithms with setup scrambles and visual face diagrams.
+            </p>
+          </div>
+          {onOpenTrainer && (
+            <button
+              type="button"
+              className="toolbar-btn flex items-center gap-2"
+              onClick={onOpenTrainer}
+            >
+              <Zap className="w-4 h-4" /> Open Practice Studio
+            </button>
+          )}
         </div>
       </div>
 
@@ -76,17 +93,17 @@ export default function AlgoTeacher({ onStartPractice }) {
         <div className="teacher-tabs">
           <button
             type="button"
-            className={`teacher-tab-btn ${activeTab === '2look-oll' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('2look-oll'); setSelectedCase(null); }}
+            className={`teacher-tab-btn ${activeTab === 'f2l' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('f2l'); setSelectedCase(null); }}
           >
-            2-Look OLL ({OLL_CASES.length})
+            F2L (41)
           </button>
           <button
             type="button"
-            className={`teacher-tab-btn ${activeTab === '2look-pll' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('2look-pll'); setSelectedCase(null); }}
+            className={`teacher-tab-btn ${activeTab === 'full-oll' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('full-oll'); setSelectedCase(null); }}
           >
-            2-Look PLL (6)
+            Full OLL (57)
           </button>
           <button
             type="button"
@@ -94,6 +111,20 @@ export default function AlgoTeacher({ onStartPractice }) {
             onClick={() => { setActiveTab('full-pll'); setSelectedCase(null); }}
           >
             Full PLL (21)
+          </button>
+          <button
+            type="button"
+            className={`teacher-tab-btn ${activeTab === '2look-oll' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('2look-oll'); setSelectedCase(null); }}
+          >
+            2-Look OLL (7)
+          </button>
+          <button
+            type="button"
+            className={`teacher-tab-btn ${activeTab === '2look-pll' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('2look-pll'); setSelectedCase(null); }}
+          >
+            2-Look PLL (6)
           </button>
         </div>
 
@@ -119,7 +150,7 @@ export default function AlgoTeacher({ onStartPractice }) {
             <div
               key={caseObj.id}
               className={`algo-card-enhanced ${isSelected ? 'selected' : ''}`}
-              onClick={() => setSelectedCase(caseObj)}
+              onClick={() => setSelectedCase(isSelected ? null : caseObj)}
             >
               <div className="algo-card-header">
                 <span className="algo-badge">{caseObj.category}</span>
@@ -129,19 +160,27 @@ export default function AlgoTeacher({ onStartPractice }) {
                   onClick={(e) => handleCopy(caseObj, e)}
                   title="Copy algorithm"
                 >
-                  {isCopied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {isCopied ? (
+                    <Check className="w-3.5 h-3.5 text-green-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
                 </button>
               </div>
 
+              {/* Visual Diagram */}
               <div className="algo-visualizer-wrap">
-                <AlgoVisualizer caseObj={caseObj} size={84} />
+                <AlgoVisualizer caseObj={caseObj} size={92} />
               </div>
 
               <div className="algo-info">
-                <div className="algo-name-title">{caseObj.name}</div>
-                <div className="algo-formula" title={caseObj.notation}>
-                  {caseObj.notation}
-                </div>
+                <h3 className="algo-name-title">{caseObj.name}</h3>
+                <div className="algo-formula">{caseObj.notation}</div>
+                {caseObj.alternative && (
+                  <div className="text-[11px] text-[var(--text-dim)] font-mono mt-1">
+                    Alt: {caseObj.alternative}
+                  </div>
+                )}
               </div>
 
               <button
@@ -149,61 +188,49 @@ export default function AlgoTeacher({ onStartPractice }) {
                 className="algo-practice-btn"
                 onClick={(e) => handlePracticeClick(caseObj, e)}
               >
-                <Play className="w-3.5 h-3.5 fill-current mr-1.5" /> Practice on Timer
+                <Play className="w-3.5 h-3.5 mr-1 fill-current" /> Practice in Timer
               </button>
             </div>
           );
         })}
       </div>
 
-      {/* Selected Case Detail Modal / Panel */}
+      {/* Bottom Sticky Case Detail Bar (if selected) */}
       {selectedCase && (
         <div className="selected-case-panel">
           <div className="selected-case-content">
             <div className="selected-case-visual">
-              <AlgoVisualizer caseObj={selectedCase} size={110} />
+              <AlgoVisualizer caseObj={selectedCase} size={64} />
             </div>
-
             <div className="selected-case-details">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-white">{selectedCase.name}</h2>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-white text-base">{selectedCase.name}</span>
                 <span className="algo-badge">{selectedCase.category}</span>
               </div>
-
-              <div className="mt-3">
-                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1">
-                  Algorithm
-                </div>
-                <div className="selected-case-notation font-mono text-base text-[var(--solve-green)] bg-[var(--bg-app)] p-2.5 rounded border border-[var(--border-subtle)]">
-                  {selectedCase.notation}
-                </div>
+              <div className="font-mono text-sm text-[var(--solve-green)] mt-0.5 font-semibold">
+                {selectedCase.notation}
               </div>
-
-              <div className="mt-3">
-                <div className="text-xs uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1">
-                  Setup Scramble (from solved cube)
+              {selectedCase.description && (
+                <div className="text-xs text-[var(--text-muted)] mt-1">
+                  {selectedCase.description}
                 </div>
-                <div className="font-mono text-xs text-[var(--text-light)] bg-[var(--bg-app)] p-2 rounded border border-[var(--border-subtle)]">
-                  {invertAlgorithm(selectedCase.notation)}
-                </div>
-              </div>
-
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  className="toolbar-btn flex items-center justify-center gap-2 flex-1"
-                  onClick={() => handlePracticeClick(selectedCase)}
-                >
-                  <Play className="w-4 h-4 fill-current" /> Practice This Case on Timer
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => setSelectedCase(null)}
-                >
-                  Close
-                </button>
-              </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="toolbar-btn"
+                onClick={() => handlePracticeClick(selectedCase)}
+              >
+                Practice in Timer
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => setSelectedCase(null)}
+              >
+                ✕
+              </button>
             </div>
           </div>
         </div>

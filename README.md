@@ -1,6 +1,6 @@
 # CubeSense
 
-A modern, high-performance speedcubing web application featuring a WCA-compliant smart timer, audio cues, inspection, statistics, interactive 2D scramble verification, and an intelligent CFOP algorithm trainer.
+A modern, high-performance speedcubing web application featuring a WCA-compliant smart timer, audio cues, inspection, statistics, interactive 2D scramble verification, and the complete CFOP algorithm suite (all 41 F2L, 57 OLL, and 21 PLL cases) with a dedicated Algorithm Practice Studio.
 
 ![CubeSense Speedcubing Platform](https://raw.githubusercontent.com/NaveenS-prog/CubeSense/main/public/vite.svg)
 
@@ -8,7 +8,29 @@ A modern, high-performance speedcubing web application featuring a WCA-compliant
 
 ## Key Features
 
-### 1. WCA Smart Timer
+### 1. Complete CFOP Algorithm Suite (119 Cases)
+- **Full 41 F2L Cases**: Basic inserts, corner in U, edge in U, white facing up, and pieces in slot with FR slot targets.
+- **Full 57 OLL Cases**: All Dot cases, All Edges Oriented (OCLL), Small/Big Lightning Bolts, Fish shapes, Knight moves, Awkward shapes, P-shapes, T-shapes, C-shapes, W-shapes, L-shapes, and I-shapes with 3x3 yellow facelets and orientation bars.
+- **Full 21 PLL Cases**: All corner permutations (Aa, Ab, E), edge permutations (Ua, Ub, H, Z), and adjacent/diagonal swaps (T, F, Ja, Jb, Ra, Rb, G-perms, V, Y, Na, Nb) with permutation cycle arrows.
+- **2-Look Subsets**: Dedicated filters for 2-Look OLL (7 cases) and 2-Look PLL (6 cases).
+
+### 2. Dedicated Algorithm Practice Studio (`AlgoTrainer`)
+- **Speed Drill Mode**:
+  - Automatically generates inverted **setup scrambles** to set up any case on a physical cube.
+  - Dedicated drill stopwatch with spacebar controls (hold 250ms to ready, release to drill).
+  - Personal Best (PB) tracker per algorithm saved in `localStorage`.
+  - Session average and rep counter.
+  - "Peek Formula" toggle to test recognition and muscle memory.
+  - Keyboard navigation (`Space` = timer, `N` = next, `P` = previous, `H` = peek formula).
+- **Flashcard Recognition Mode**:
+  - Test case recognition from the diagram alone without looking at the notation.
+  - Score counter and accuracy tracking.
+- **Complete Library & Cheat Sheet**:
+  - Instant live search by name, notation, or triggers.
+  - One-click copy for notations and setup scrambles.
+  - Bookmark favorite cases.
+
+### 3. WCA Smart Timer
 - **WCA State Machine**:
   - `Idle` → `Inspection` (15s WCA countdown with 8s and 12s audible alerts)
   - `Holding` (300ms hold countdown to arm timer)
@@ -17,42 +39,19 @@ A modern, high-performance speedcubing web application featuring a WCA-compliant
   - `Stopped` (Stops the millisecond any key is pressed or pads are touched)
 - **Flexible Controls**: Full keyboard spacebar control with hold-to-start timing, plus optional on-screen touchpads for phones and touch devices.
 
-### 2. Audio Synthesizer (Web Audio API)
+### 4. Audio Synthesizer (Web Audio API)
 - Zero external audio files (100% offline-ready, no network latency).
-- WCA 8-second inspection alert ("8 seconds").
-- WCA 12-second inspection warning ("12 seconds").
-- Ready armed chime, start pop, stop tone, and triumphant Personal Best (PB) fanfare!
-- One-click mute/unmute control.
+- Natural synthesized sine and triangle frequency alerts for 8s inspection warning, 12s urgent warning, ready chimes, solve stop, and PB celebrations.
 
-### 3. Interactive Scramble Verification & Multi-Event
-- **WCA Scramble Generator**: Supports 3x3x3, 2x2x2, 4x4x4, and 3x3 One-Handed (OH) with cancellation protection (no consecutive or opposite face cancellation).
-- **2D Unfolded Cube Net**: Real-time 3x3 Rubik's cube state simulator rendering an unfolded 6-face SVG net (U, L, F, R, B, D) to verify scrambles before starting inspection.
-
-### 4. CFOP Algorithm Trainer (Algo Teacher)
-- **Comprehensive Library**:
-  - **2-Look OLL** (Edge orientation cross cases & corner orientation cases)
-  - **2-Look PLL** (Corner swaps & edge permutations)
-  - **Full PLL** (All 21 standard WCA permutation cases: T, Y, Ua, Ub, H, Z, J, R, F, V, E, A, G, N perms)
-- **Dynamic SVG Visualizers**:
-  - OLL: Top-down yellow facelets with side orientation bars.
-  - PLL: Permutation cycle arrows and swap vectors.
-- **True Inverted Setup Scrambles**: Mathematically inverts the algorithm so applying the setup scramble on a solved cube recreates the exact case!
-- **Direct Practice Mode**: Practice any algorithm on the Smart Timer with live algorithm prompts and dedicated practice tagging.
-
-### 5. WCA Regulations Statistics & Solve Analytics
-- **Accurate WCA Ao5 / Ao12 Trimming**: Properly drops the best and worst times (counting single DNF as worst time, and failing to DNF average only when ≥ 2 DNFs occur).
-- **Session Intelligence**: Real-time tracking of PB (Best Single), Worst Single, Session Mean, Current Ao5, Best Ao5, Current Ao12, and Best Ao12.
-- **Interactive Solve Detail Modal**: Click any solve to review exact timestamps, raw vs penalty time, 2D scramble preview net, re-scramble trigger, and +2/DNF management.
-- **Session Progress Chart**: SVG sparkline trend graph showing solve progression over time.
-- **Data Portability**: 1-click export of session solves to JSON or CSV format.
-- **Optional Cloud Sync**: Sync sessions and solves across devices with Supabase authentication.
+### 5. 2D Scramble Verification Net
+- Real-time unfolded 2D cube net preview of the exact scrambled state.
+- Accurately tracks every move via an in-memory 54-facelet cube permutation engine.
 
 ---
 
 ## Tech Stack
-
 - **Frontend**: React 18, Vite
-- **Styling**: Tailwind CSS, custom speedcubing neon design system
+- **Styling**: Tailwind CSS & custom speedcubing dark glassmorphism design system
 - **Audio**: Web Audio API (native oscillator synthesis)
 - **Icons**: Lucide React
 - **Cloud Backend (Optional)**: Supabase (Auth, PostgreSQL database, RLS policies)
@@ -61,11 +60,6 @@ A modern, high-performance speedcubing web application featuring a WCA-compliant
 
 ## Getting Started
 
-### Prerequisites
-- Node.js (v18+ recommended)
-- npm or yarn
-
-### Installation
 ```bash
 # Clone the repository
 git clone https://github.com/NaveenS-prog/CubeSense.git
@@ -74,34 +68,11 @@ cd CubeSense
 # Install dependencies
 npm install
 
-# Start the development server
+# Start development server
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
-### Building for Production
+Build for production:
 ```bash
 npm run build
-npm run preview
 ```
-
----
-
-## Cloud Sync Setup (Optional)
-
-To enable cross-device cloud sync with Supabase:
-1. Create a free project at [supabase.com](https://supabase.com).
-2. Execute the schema in [`supabase-schema.sql`](./supabase-schema.sql) in the Supabase SQL Editor.
-3. Create a `.env` file in the root directory:
-```env
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-```
-4. Restart your development server. Solves and timing sessions will automatically synchronize!
-
----
-
-## License
-
-MIT License. Crafted for the speedcubing community.

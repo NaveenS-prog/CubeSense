@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Timer,
+  Zap,
   GraduationCap,
   ChevronLeft,
   ChevronRight,
@@ -8,8 +9,9 @@ import {
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { id: 'timer', label: 'Timer', icon: Timer },
-  { id: 'teacher', label: 'Algo Teacher', icon: GraduationCap },
+  { id: 'timer', label: 'Speed Timer', icon: Timer },
+  { id: 'trainer', label: 'Algo Studio', icon: Zap },
+  { id: 'teacher', label: 'CFOP Library', icon: GraduationCap },
 ];
 
 function Sidebar({
