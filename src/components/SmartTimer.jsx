@@ -2,8 +2,6 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   Copy,
   RefreshCw,
-  Video,
-  VideoOff,
   Volume2,
   VolumeX,
   Eye,
@@ -16,11 +14,6 @@ import {
 } from 'lucide-react';
 import { generateScramble, CUBE_EVENTS } from '../utils/scramble';
 import { formatTime, computeStats } from '../utils/timerStats';
-import {
-  analyzeStackmatHands,
-  drawStackmatCanvas,
-  startHandCamera,
-} from '../lib/mediapipeHands';
 import {
   playWarning8s,
   playWarning12s,
@@ -71,25 +64,15 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
   const [useInspection, setUseInspection] = useState(true);
   const [soundActive, setSoundActive] = useState(() => isSoundEnabled());
   const [showVisualizer, setShowVisualizer] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
   const [showTouchpads, setShowTouchpads] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [copiedScramble, setCopiedScramble] = useState(false);
-
-  // Camera & Stackmat states
-  const [isCameraReady, setIsCameraReady] = useState(false);
-  const [isCameraLoading, setIsCameraLoading] = useState(false);
-  const [cameraMessage, setCameraMessage] = useState('');
-  const [stackmatAnalysis, setStackmatAnalysis] = useState(null);
 
   // Touchpad states (manual touch on screen)
   const [touchLeftDown, setTouchLeftDown] = useState(false);
   const [touchRightDown, setTouchRightDown] = useState(false);
 
   // Refs for high-speed performance / animation frame loops
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const stopCameraRef = useRef(null);
   const timerStatusRef = useRef(timerStatus);
   const inspectionStartRef = useRef(0);
   const solveStartRef = useRef(0);
@@ -97,7 +80,7 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
   const rafRef = useRef(null);
   const scrambleRef = useRef(scramble);
   const inspectionPenaltyRef = useRef(inspectionPenalty);
-  const handsDownRef = useRef(false);
+  const touchpadsDownRef = useRef(false);
   const ignoreNextSpaceUpRef = useRef(false);
   const warned8sRef = useRef(false);
   const warned12sRef = useRef(false);
@@ -306,7 +289,7 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
     if (timerStatusRef.current === 'idle') return;
     clearHoldTimeout();
     stopAnimation();
-    handsDownRef.current = false;
+    touchpadsDownRef.current = false;
     setDisplayTime(0);
     setInspectionElapsed(0);
     setInspectionRemaining(INSPECTION_LIMIT_MS);
@@ -420,10 +403,10 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
   // Touchpad event handlers
   useEffect(() => {
     const bothPadsTouched = touchLeftDown && touchRightDown;
-    const wasTouched = handsDownRef.current;
+    const wasTouched = touchpadsDownRef.current;
 
     if (showTouchpads) {
-      handsDownRef.current = bothPadsTouched;
+      touchpadsDownRef.current = bothPadsTouched;
 
       if (!wasTouched && bothPadsTouched) {
         if (timerStatusRef.current === 'inspection' || (!useInspection && (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped'))) {
@@ -438,83 +421,6 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
       }
     }
   }, [touchLeftDown, touchRightDown, showTouchpads, useInspection]);
-
-  // Camera & MediaPipe Hand Tracking
-  const handleHandResults = (results) => {
-    const analysis = analyzeStackmatHands(results);
-    setStackmatAnalysis(analysis);
-
-    // Render on canvas overlay
-    if (canvasRef.current) {
-      drawStackmatCanvas(canvasRef.current, videoRef.current, analysis, results);
-    }
-
-    const wasHandsDown = handsDownRef.current;
-    const bothHandsDown = analysis.bothHandsDown;
-    handsDownRef.current = bothHandsDown;
-
-    if (!wasHandsDown && bothHandsDown && timerStatusRef.current === 'inspection') {
-      beginHoldToStart();
-    } else if (wasHandsDown && !bothHandsDown && timerStatusRef.current === 'holding') {
-      abortHoldToStart();
-    } else if (wasHandsDown && !bothHandsDown && timerStatusRef.current === 'ready') {
-      startSolve();
-    } else if (!wasHandsDown && bothHandsDown && timerStatusRef.current === 'running') {
-      stopSolve();
-    }
-  };
-
-  const toggleCamera = () => {
-    if (showCamera) {
-      stopCameraRef.current?.();
-      stopCameraRef.current = null;
-      setShowCamera(false);
-      setIsCameraReady(false);
-      setCameraMessage('');
-    } else {
-      setShowCamera(true);
-      setIsCameraLoading(true);
-    }
-  };
-
-  useEffect(() => {
-    if (!showCamera) return undefined;
-
-    let isMounted = true;
-    const initCamera = async () => {
-      const video = videoRef.current;
-      if (!video) return;
-
-      try {
-        stopCameraRef.current?.();
-        stopCameraRef.current = await startHandCamera(video, handleHandResults);
-        if (isMounted) {
-          setIsCameraReady(true);
-          setCameraMessage('Stackmat active · Place both hands flat on desk pads to arm.');
-        }
-      } catch (err) {
-        if (isMounted) {
-          setIsCameraReady(false);
-          setCameraMessage(err?.message || 'Camera failed. Allow webcam permission.');
-        }
-      } finally {
-        if (isMounted) {
-          setIsCameraLoading(false);
-        }
-      }
-    };
-
-    const timer = setTimeout(initCamera, 80);
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
-    };
-  }, [showCamera]);
-
-  useEffect(() => () => {
-    stopCameraRef.current?.();
-    stopCameraRef.current = null;
-  }, []);
 
   // Display time formatting
   const displayLabel = () => {
@@ -611,15 +517,6 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
 
             <button
               type="button"
-              className={`icon-btn ${showCamera ? 'active' : ''}`}
-              onClick={toggleCamera}
-              title={showCamera ? 'Turn off camera Stackmat' : 'Turn on camera Stackmat'}
-            >
-              {showCamera ? <Video className="w-4 h-4 text-green-400" /> : <VideoOff className="w-4 h-4" />}
-            </button>
-
-            <button
-              type="button"
               className="icon-btn"
               onClick={toggleFullscreen}
               title="Toggle Fullscreen"
@@ -690,33 +587,6 @@ function SmartTimer({ session, practiceCase, onExitPractice }) {
             <div className="timer-warning">+2 inspection penalty applied</div>
           )}
         </div>
-
-        {/* Camera / Stackmat Video Overlay */}
-        {showCamera && (
-          <div className="camera-stackmat-wrap">
-            <div className="relative overflow-hidden rounded-xl border border-[var(--border-panel)] shadow-2xl">
-              <video
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                className="hidden"
-              />
-              <canvas
-                ref={canvasRef}
-                width={380}
-                height={260}
-                className="camera-stackmat-canvas"
-              />
-              {isCameraReady && (
-                <div className="camera-badge">
-                  Stackmat: {stackmatAnalysis?.bothHandsDown ? 'BOTH PADS ARMED' : (stackmatAnalysis?.statusMessage || 'Waiting for hands')}
-                </div>
-              )}
-            </div>
-            {cameraMessage && <p className="camera-hint">{cameraMessage}</p>}
-          </div>
-        )}
 
         {/* On-Screen Touchpads (For Mobile / Touchscreen or Visual Mouse Cubing) */}
         {showTouchpads && (

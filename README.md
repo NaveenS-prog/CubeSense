@@ -1,6 +1,6 @@
 # CubeSense
 
-A modern, high-performance speedcubing web application featuring a computer-vision camera Stackmat timer, WCA-compliant inspection and statistics, interactive 2D scramble verification, and an intelligent CFOP algorithm trainer.
+A modern, high-performance speedcubing web application featuring a WCA-compliant smart timer, audio cues, inspection, statistics, interactive 2D scramble verification, and an intelligent CFOP algorithm trainer.
 
 ![CubeSense Speedcubing Platform](https://raw.githubusercontent.com/NaveenS-prog/CubeSense/main/public/vite.svg)
 
@@ -8,16 +8,14 @@ A modern, high-performance speedcubing web application featuring a computer-visi
 
 ## Key Features
 
-### 1. Vision Stackmat Timer (MediaPipe Hands)
-- **Computer-Vision Palm Detection**: True 21-landmark geometric analysis to detect palms resting flat on the desk vs holding a cube or gesturing in the air.
-- **Dual Virtual Sensor Pads**: Distinct Left Touchpad and Right Touchpad monitoring with real-time HUD canvas overlay and neon status indicators.
+### 1. WCA Smart Timer
 - **WCA State Machine**:
   - `Idle` → `Inspection` (15s WCA countdown with 8s and 12s audible alerts)
-  - `Holding` (300ms countdown when both hands rest on pads or spacebar is held)
+  - `Holding` (300ms hold countdown to arm timer)
   - `Ready` (Glowing neon green armed state)
-  - `Running` (Starts the millisecond hands lift off pads or spacebar is released)
-  - `Stopped` (Stops the millisecond hands touch pads or any key is pressed)
-- **Touchscreen & Keyboard Fallback**: Full spacebar control or on-screen touchpads for phones and tablets.
+  - `Running` (Starts the millisecond spacebar or touchpads are released)
+  - `Stopped` (Stops the millisecond any key is pressed or pads are touched)
+- **Flexible Controls**: Full keyboard spacebar control with hold-to-start timing, plus optional on-screen touchpads for phones and touch devices.
 
 ### 2. Audio Synthesizer (Web Audio API)
 - Zero external audio files (100% offline-ready, no network latency).
@@ -55,7 +53,6 @@ A modern, high-performance speedcubing web application featuring a computer-visi
 
 - **Frontend**: React 18, Vite
 - **Styling**: Tailwind CSS, custom speedcubing neon design system
-- **Computer Vision**: MediaPipe Hands (via CDN)
 - **Audio**: Web Audio API (native oscillator synthesis)
 - **Icons**: Lucide React
 - **Cloud Backend (Optional)**: Supabase (Auth, PostgreSQL database, RLS policies)

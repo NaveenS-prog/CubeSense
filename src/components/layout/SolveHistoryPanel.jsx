@@ -112,7 +112,7 @@ function SolveHistoryPanel({ solves, onDelete, onApplyPenalty, onLoadScramble, o
         {solves.length === 0 ? (
           <div className="solve-empty">
             <p>No solves yet this session.</p>
-            <p className="text-xs text-[var(--text-muted)] mt-1">Press Spacebar or arm camera to begin.</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1">Press Spacebar to begin.</p>
           </div>
         ) : (
           solves.map((record, index) => {

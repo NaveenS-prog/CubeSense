@@ -1,16 +1,14 @@
 # CubeSense - Enhanced Speedcubing Application
 
 ## Overview
-CubeSense is a comprehensive speedcubing platform featuring a computer-vision camera Stackmat timer, WCA-compliant inspection and statistics, interactive 2D scramble verification, and an intelligent CFOP algorithm trainer.
+CubeSense is a comprehensive speedcubing platform featuring a WCA-compliant smart timer with audio synthesis, inspection and statistics, interactive 2D scramble verification, and an intelligent CFOP algorithm trainer.
 
 ## Key Improvements Implemented
 
-1. **Vision Stackmat Timer (MediaPipe Hands)**:
-   - Upgraded from simple hand-count placeholder to genuine 21-landmark geometric analysis.
-   - Accurately discriminates between flat palms resting on desk pads vs holding a cube.
-   - Dual virtual sensor zones (Left Touchpad and Right Touchpad).
-   - Real-time mirrored canvas HUD overlay with glowing neon pads and hand skeletons.
-   - Added on-screen touchpads and full spacebar keyboard fallback.
+1. **WCA Smart Timer**:
+   - Official WCA inspection countdown (15s) with 8s and 12s voice/audio alerts.
+   - Precise hold-to-start timing (300ms hold) with spacebar controls and on-screen touchpads.
+   - Distinct timer states (`idle`, `inspection`, `holding`, `ready`, `running`, `stopped`).
 
 2. **Web Audio API Synthesizer**:
    - Zero external audio files (100% offline-ready).
@@ -47,7 +45,6 @@ CubeSense/
 │   ├── data/
 │   │   └── algorithms.js
 │   ├── lib/
-│   │   ├── mediapipeHands.js
 │   │   └── supabaseClient.js
 │   ├── utils/
 │   │   ├── cubeSimulator.js
