@@ -595,10 +595,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
           {/* Collapsible 2D Unfolded Scramble Net */}
           {showVisualizer && (
             <div className="scramble-visualizer-box">
-              <div className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
-                Scramble Verification Net
-              </div>
-              <CubeNetVisualizer scramble={scramble} size={160} />
+              <CubeNetVisualizer scramble={scramble} event={selectedEvent} size={180} />
             </div>
           )}
         </div>
