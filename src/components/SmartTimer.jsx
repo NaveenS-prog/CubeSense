@@ -125,14 +125,25 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
   };
 
   const recordSolve = (record) => {
-    const isPb = lastPbRef.current !== null && record.finalTime !== null && record.finalTime < lastPbRef.current;
-    addSolve({
-      ...record,
-      date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    });
+    try {
+      const isPb = lastPbRef.current !== null && record.finalTime !== null && record.finalTime < lastPbRef.current;
+      addSolve({
+        event: selectedEvent,
+        ...record,
+        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
 
-    if (isPb) {
-      setTimeout(() => playPbSound(), 200);
+      if (isPb) {
+        setTimeout(() => {
+          try {
+            playPbSound();
+          } catch (e) {
+            console.warn('PB sound error:', e);
+          }
+        }, 200);
+      }
+    } catch (err) {
+      console.error('Error recording solve:', err);
     }
   };
 
@@ -187,6 +198,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
         playStopSound();
         recordSolve({
           type: 'solve',
+          event: selectedEvent,
           penalty: 'DNF',
           time: null,
           finalTime: null,
@@ -255,24 +267,34 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
 
   // 4. Stop Solve (Hands back on pads or Any key pressed)
   const stopSolve = () => {
-    if (timerStatusRef.current !== 'running') return;
-    const endTime = performance.now();
-    const rawTime = endTime - solveStartRef.current;
-    const finalTime = rawTime + (inspectionPenaltyRef.current === '+2' ? 2000 : 0);
+    try {
+      if (timerStatusRef.current !== 'running') return;
+      const endTime = performance.now();
+      const rawTime = endTime - solveStartRef.current;
+      const finalTime = rawTime + (inspectionPenaltyRef.current === '+2' ? 2000 : 0);
 
-    stopAnimation();
-    setDisplayTime(rawTime);
-    setStatus('stopped');
-    playStopSound();
+      stopAnimation();
+      setDisplayTime(rawTime);
+      setStatus('stopped');
+      try {
+        playStopSound();
+      } catch (e) {
+        console.warn('Stop sound error:', e);
+      }
 
-    recordSolve({
-      type: 'solve',
-      penalty: inspectionPenaltyRef.current,
-      time: rawTime,
-      finalTime,
-      scramble: scrambleRef.current,
-    });
-    setScramble(nextScramble());
+      recordSolve({
+        type: 'solve',
+        event: selectedEvent,
+        penalty: inspectionPenaltyRef.current,
+        time: rawTime,
+        finalTime,
+        scramble: scrambleRef.current,
+      });
+      setScramble(nextScramble());
+    } catch (err) {
+      console.error('Error in stopSolve:', err);
+      setStatus('stopped');
+    }
   };
 
   const resetScramble = () => {
@@ -428,7 +450,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
     if (timerStatus === 'inspection' || timerStatus === 'holding' || timerStatus === 'ready') {
       return `${Math.ceil(inspectionRemaining / 1000)}`;
     }
-    if (timerStatus === 'stopped' && solves[0]?.penalty === 'DNF') return 'DNF';
+    if (timerStatus === 'stopped' && solves?.[0]?.penalty === 'DNF') return 'DNF';
     if (timerStatus === 'idle') return '0.00';
     return formatTime(displayTime);
   };

@@ -2,11 +2,11 @@ import React from 'react';
 import { formatTime } from '../../utils/timerStats';
 
 export default function SessionTrendChart({ solves, height = 50 }) {
-  if (!solves || solves.length < 2) return null;
+  if (!Array.isArray(solves) || solves.length < 2) return null;
 
   // Chronological order (oldest to newest)
-  const chronological = [...solves].reverse();
-  const valid = chronological.filter((s) => s.penalty !== 'DNF' && Number.isFinite(s.finalTime));
+  const chronological = [...solves].filter(Boolean).reverse();
+  const valid = chronological.filter((s) => s && s.penalty !== 'DNF' && Number.isFinite(s.finalTime));
 
   if (valid.length < 2) return null;
 

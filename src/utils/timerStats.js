@@ -36,13 +36,13 @@ export function formatSolveDisplay(record) {
  * - 2 or more DNFs in an Ao5/Ao12 results in a DNF average.
  */
 export function calculateTrimmedAverage(solvesChunk) {
-  if (!solvesChunk || solvesChunk.length < 3) return null;
+  if (!Array.isArray(solvesChunk) || solvesChunk.length < 3) return null;
 
-  const count = solvesChunk.length;
-  let dnfCount = 0;
   const validTimes = [];
+  let dnfCount = 0;
 
   for (const solve of solvesChunk) {
+    if (!solve) continue;
     if (solve.penalty === 'DNF' || !Number.isFinite(solve.finalTime)) {
       dnfCount++;
     } else {
@@ -55,6 +55,8 @@ export function calculateTrimmedAverage(solvesChunk) {
     return 'DNF';
   }
 
+  if (validTimes.length === 0) return 'DNF';
+
   // Sort valid times ascending
   validTimes.sort((a, b) => a - b);
 
@@ -62,12 +64,14 @@ export function calculateTrimmedAverage(solvesChunk) {
     // The DNF is the single worst time (trimmed off top).
     // The best time is trimmed off bottom (validTimes[0]).
     const trimmed = validTimes.slice(1);
+    if (!trimmed.length) return 'DNF';
     const sum = trimmed.reduce((acc, t) => acc + t, 0);
     return sum / trimmed.length;
   }
 
   // 0 DNFs: trim lowest and highest
   const trimmed = validTimes.slice(1, -1);
+  if (!trimmed.length) return 'DNF';
   const sum = trimmed.reduce((acc, t) => acc + t, 0);
   return sum / trimmed.length;
 }
@@ -76,7 +80,7 @@ export function calculateTrimmedAverage(solvesChunk) {
  * Returns the current average of the last `count` solves (newest first).
  */
 export function averageOf(records, count) {
-  if (!records || records.length < count) return null;
+  if (!Array.isArray(records) || records.length < count) return null;
   const chunk = records.slice(0, count);
   return calculateTrimmedAverage(chunk);
 }
@@ -85,7 +89,7 @@ export function averageOf(records, count) {
  * Computes comprehensive session statistics including best Ao5 and best Ao12.
  */
 export function computeStats(solves) {
-  if (!solves || solves.length === 0) {
+  if (!Array.isArray(solves) || solves.length === 0) {
     return {
       pb: null,
       worst: null,
@@ -102,7 +106,7 @@ export function computeStats(solves) {
     };
   }
 
-  const valid = solves.filter((s) => s.penalty !== 'DNF' && Number.isFinite(s.finalTime));
+  const valid = solves.filter((s) => s && s.penalty !== 'DNF' && Number.isFinite(s.finalTime));
   const validTimes = valid.map((s) => s.finalTime);
 
   const pb = validTimes.length ? Math.min(...validTimes) : null;
@@ -120,7 +124,7 @@ export function computeStats(solves) {
   }
 
   // Solves are stored newest-first. Reverse to chronological order to calculate sliding best averages.
-  const chronological = [...solves].reverse();
+  const chronological = [...solves].filter(Boolean).reverse();
 
   // Find Best Ao5
   let bestAo5 = null;
@@ -150,8 +154,8 @@ export function computeStats(solves) {
     }
   }
 
-  const dnfCount = solves.filter((s) => s.penalty === 'DNF').length;
-  const plus2Count = solves.filter((s) => s.penalty === '+2').length;
+  const dnfCount = solves.filter((s) => s && s.penalty === 'DNF').length;
+  const plus2Count = solves.filter((s) => s && s.penalty === '+2').length;
 
   return {
     pb,
@@ -161,7 +165,7 @@ export function computeStats(solves) {
     bestAo5,
     ao12: averageOf(solves, 12),
     bestAo12,
-    totalCount: solves.length,
+    totalCount: solves.filter(Boolean).length,
     validCount: valid.length,
     dnfCount,
     plus2Count,

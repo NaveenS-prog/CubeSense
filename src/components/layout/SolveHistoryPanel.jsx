@@ -14,19 +14,20 @@ function StatCell({ label, value, subValue, highlight }) {
   );
 }
 
-function SolveHistoryPanel({ solves, onDelete, onApplyPenalty, onLoadScramble, onClearSession }) {
+function SolveHistoryPanel({ solves = [], onDelete, onApplyPenalty, onLoadScramble, onClearSession }) {
+  const safeSolves = useMemo(() => (Array.isArray(solves) ? solves.filter(Boolean) : []), [solves]);
   const [selectedSolveIndex, setSelectedSolveIndex] = useState(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showChart, setShowChart] = useState(true);
 
-  const stats = useMemo(() => computeStats(solves), [solves]);
+  const stats = useMemo(() => computeStats(safeSolves), [safeSolves]);
 
   const formatStat = (ms) => (ms != null ? (ms === 'DNF' ? 'DNF' : formatTime(ms)) : '--');
 
-  const selectedSolve = selectedSolveIndex !== null ? solves[selectedSolveIndex] : null;
+  const selectedSolve = selectedSolveIndex !== null ? safeSolves[selectedSolveIndex] : null;
 
   const exportAsJSON = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(solves, null, 2));
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(safeSolves, null, 2));
     const a = document.createElement('a');
     a.href = dataStr;
     a.download = `cubesense-session-${new Date().toISOString().slice(0, 10)}.json`;
@@ -36,8 +37,8 @@ function SolveHistoryPanel({ solves, onDelete, onApplyPenalty, onLoadScramble, o
 
   const exportAsCSV = () => {
     const headers = 'Solve,Time(ms),Formatted,Penalty,Scramble,Date\n';
-    const rows = solves.map((s, idx) => {
-      const num = solves.length - idx;
+    const rows = safeSolves.map((s, idx) => {
+      const num = safeSolves.length - idx;
       const formatted = formatSolveDisplay(s);
       const cleanScramble = (s.scramble || '').replace(/"/g, '""');
       return `${num},${s.finalTime || ''},"${formatted}","${s.penalty || ''}","${cleanScramble}","${s.date || s.solvedAt || ''}"`;
@@ -56,11 +57,11 @@ function SolveHistoryPanel({ solves, onDelete, onApplyPenalty, onLoadScramble, o
       <div className="solve-panel-header">
         <div className="flex items-center gap-2">
           <span className="solve-panel-title">Session Solves</span>
-          <span className="solve-panel-count">{solves.length}</span>
+          <span className="solve-panel-count">{safeSolves.length}</span>
         </div>
 
         <div className="flex items-center gap-1">
-          {solves.length > 0 && (
+          {safeSolves.length > 0 && (
             <div className="relative">
               <button
                 type="button"
@@ -83,7 +84,7 @@ function SolveHistoryPanel({ solves, onDelete, onApplyPenalty, onLoadScramble, o
             </div>
           )}
 
-          {onClearSession && solves.length > 0 && (
+          {onClearSession && safeSolves.length > 0 && (
             <button
               type="button"
               className="icon-btn"
@@ -101,28 +102,28 @@ function SolveHistoryPanel({ solves, onDelete, onApplyPenalty, onLoadScramble, o
       </div>
 
       {/* Mini Trend Chart */}
-      {solves.length >= 3 && (
+      {safeSolves.length >= 3 && (
         <div className="px-3 pt-2 pb-1 border-b border-[var(--border-subtle)]">
-          <SessionTrendChart solves={solves} height={46} />
+          <SessionTrendChart solves={safeSolves} height={46} />
         </div>
       )}
 
       {/* Solve List */}
       <div className="solve-list">
-        {solves.length === 0 ? (
+        {safeSolves.length === 0 ? (
           <div className="solve-empty">
             <p>No solves yet this session.</p>
             <p className="text-xs text-[var(--text-muted)] mt-1">Press Spacebar to begin.</p>
           </div>
         ) : (
-          solves.map((record, index) => {
-            const solveNumber = solves.length - index;
-            const isDnf = record.penalty === 'DNF';
-            const isPlus2 = record.penalty === '+2';
+          safeSolves.map((record, index) => {
+            const solveNumber = safeSolves.length - index;
+            const isDnf = record?.penalty === 'DNF';
+            const isPlus2 = record?.penalty === '+2';
 
             return (
               <div
-                key={record.id || record.localId || `${record.solvedAt}-${index}`}
+                key={record?.id || record?.localId || `${record?.solvedAt}-${index}`}
                 className="solve-row cursor-pointer select-none"
                 onClick={() => setSelectedSolveIndex(index)}
               >
@@ -167,7 +168,7 @@ function SolveHistoryPanel({ solves, onDelete, onApplyPenalty, onLoadScramble, o
         <SolveDetailModal
           solve={selectedSolve}
           solveIndex={selectedSolveIndex}
-          totalSolves={solves.length}
+          totalSolves={safeSolves.length}
           onClose={() => setSelectedSolveIndex(null)}
           onApplyPenalty={onApplyPenalty}
           onDelete={onDelete}

@@ -41,19 +41,34 @@ function readLocal(userId) {
 }
 
 function writeLocal(userId, payload) {
-  localStorage.setItem(storageKey(userId), JSON.stringify(payload));
+  try {
+    localStorage.setItem(storageKey(userId), JSON.stringify(payload));
+  } catch (err) {
+    console.warn('Unable to persist session state to localStorage:', err);
+  }
 }
 
 function dbRowToRecord(row) {
+  if (!row) return null;
+  let formattedDate = '';
+  try {
+    if (row.solved_at) {
+      formattedDate = new Date(row.solved_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+  } catch {
+    formattedDate = '';
+  }
+
   return {
     id: row.id,
-    type: row.type,
-    penalty: row.penalty,
-    time: row.raw_time_ms,
-    finalTime: row.final_time_ms,
-    scramble: row.scramble,
-    date: new Date(row.solved_at).toLocaleTimeString(),
-    solvedAt: row.solved_at,
+    type: row.type || 'solve',
+    event: row.event || '3x3',
+    penalty: row.penalty || null,
+    time: row.raw_time_ms ?? row.final_time_ms,
+    finalTime: row.final_time_ms ?? row.raw_time_ms,
+    scramble: row.scramble || '',
+    date: formattedDate,
+    solvedAt: row.solved_at || new Date().toISOString(),
     sessionId: row.session_id,
   };
 }
@@ -476,17 +491,20 @@ export function useTimerSessions(authSession) {
     }
 
     const saved = dbRowToRecord(data);
-    setSolves((prev) => {
-      const next = [saved, ...prev.filter((item) => item.localId !== localId && item.id !== localId)];
-      const local = readLocal(userId) || { solvesBySession: {} };
-      persistLocal(currentSessions, currentSessionId, {
-        ...(local.solvesBySession || {}),
-        [currentSessionId]: next,
+    if (saved) {
+      setSolves((prev) => {
+        const next = [saved, ...prev.filter((item) => item && item.localId !== localId && item.id !== localId)];
+        const local = readLocal(userId) || { solvesBySession: {} };
+        persistLocal(currentSessions, currentSessionId, {
+          ...(local.solvesBySession || {}),
+          [currentSessionId]: next,
+        });
+        return next;
       });
-      return next;
-    });
+      return saved;
+    }
 
-    return saved;
+    return recordWithMeta;
   }, [activeSessionId, sessions, userId, cloudSessionsEnabled, persistLocal]);
 
   const deleteSolve = useCallback(async (record) => {

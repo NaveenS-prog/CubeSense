@@ -5,6 +5,7 @@ import AlgoTeacher from './components/AlgoTeacher';
 import AuthModal from './components/AuthModal';
 import Sidebar from './components/layout/Sidebar';
 import ResetPassword from './components/ResetPassword';
+import ErrorBoundary from './components/ErrorBoundary';
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient';
 import { authService } from './lib/authService';
 import { invertAlgorithm } from './utils/cubeSimulator';
@@ -104,12 +105,14 @@ function App() {
 
       <div className="app-content">
         {activeTab === 'timer' && (
-          <SmartTimer
-            session={session}
-            practiceCase={practiceCase}
-            onExitPractice={() => setPracticeCase(null)}
-            onOpenAuth={() => setAuthModalOpen(true)}
-          />
+          <ErrorBoundary>
+            <SmartTimer
+              session={session}
+              practiceCase={practiceCase}
+              onExitPractice={() => setPracticeCase(null)}
+              onOpenAuth={() => setAuthModalOpen(true)}
+            />
+          </ErrorBoundary>
         )}
         {activeTab === 'trainer' && (
           <div className="teacher-page">

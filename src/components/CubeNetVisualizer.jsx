@@ -26,25 +26,36 @@ export default function CubeNetVisualizer({
   const [flip3D, setFlip3D] = useState(false); // Front (U/F/R) vs Back (D/B/L)
 
   const visualData = useMemo(() => {
-    if (passedCube) {
+    try {
+      if (passedCube) {
+        return {
+          type: 'cube',
+          event: '3x3',
+          name: '3x3x3',
+          data: { size: 3, faces: passedCube },
+        };
+      }
+      return getScrambleVisualData(event, scramble || '');
+    } catch (err) {
+      console.warn('Scramble visualizer calculation failed:', err);
       return {
         type: 'cube',
         event: '3x3',
         name: '3x3x3',
-        data: { size: 3, faces: passedCube },
+        data: { size: 3, faces: { U: Array(9).fill('U'), D: Array(9).fill('D'), F: Array(9).fill('F'), B: Array(9).fill('B'), L: Array(9).fill('L'), R: Array(9).fill('R') } },
       };
     }
-    return getScrambleVisualData(event, scramble);
   }, [scramble, event, passedCube]);
 
-  const isCube = visualData.type === 'cube';
+  const isCube = visualData?.type === 'cube';
 
   // ----------------------------------------------------
   // 1. RENDER 2D UNFOLDED CUBE NET (2x2, 3x3, 4x4, 5x5)
   // ----------------------------------------------------
   const renderCubeNet = (cubeData) => {
-    const N = cubeData.size;
-    const faces = cubeData.faces;
+    if (!cubeData || !cubeData.faces) return null;
+    const N = cubeData.size || 3;
+    const faces = cubeData.faces || {};
 
     // Dimensions: 4 faces wide (L, F, R, B), 3 faces high (U, F, D)
     const stickerSize = 48 / N;
@@ -125,8 +136,9 @@ export default function CubeNetVisualizer({
   // 2. RENDER 3D ISOMETRIC DIGITAL CUBE (2x2, 3x3, 4x4, 5x5)
   // ----------------------------------------------------
   const renderCube3D = (cubeData) => {
-    const N = cubeData.size;
-    const faces = cubeData.faces;
+    if (!cubeData || !cubeData.faces) return null;
+    const N = cubeData.size || 3;
+    const faces = cubeData.faces || {};
 
     // Viewbox is centered around (0, 0)
     // Isometric basis vectors:
@@ -295,6 +307,7 @@ export default function CubeNetVisualizer({
   // 3. RENDER POLYHEDRAL PUZZLES (Pyraminx, Skewb, Megaminx)
   // ----------------------------------------------------
   const renderPolyNet = (polyData) => {
+    if (!polyData || !Array.isArray(polyData.polygons)) return null;
     const { width, height, polygons } = polyData;
 
     return (
