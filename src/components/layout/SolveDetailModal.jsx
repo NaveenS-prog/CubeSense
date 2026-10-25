@@ -81,7 +81,7 @@ export default function SolveDetailModal({
 
               {/* Scramble Net Preview */}
               <div className="flex justify-center mt-3 pt-3 border-t border-[var(--border-subtle)]">
-                <CubeNetVisualizer scramble={solve.scramble} event={solve.event || '3x3'} size={150} />
+                <CubeNetVisualizer scramble={solve.scramble} event={solve.event || '3x3'} size={180} />
               </div>
             </div>
           )}

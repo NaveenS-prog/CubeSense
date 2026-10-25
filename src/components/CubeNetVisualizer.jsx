@@ -1,29 +1,122 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   CUBE_COLORS,
   getScrambleVisualData,
   normalizeEvent,
 } from '../utils/puzzleSimulator';
-import { Rotate3d, Compass } from 'lucide-react';
+import { Rotate3d, Compass, RotateCcw } from 'lucide-react';
 
 /**
- * Universal Scramble Verification Visualizer
- * Dynamically renders the correct puzzle:
- * - 2x2, 3x3, 4x4, 5x5 Cubes (with 2D Net and 3D Isometric view toggle)
- * - Pyraminx (Tetrahedron unfolded net)
- * - Skewb (6-face diamond/corner net)
- * - Megaminx (12-face dodecahedral net)
+ * Normal vectors for each cube face
  */
+const FACE_NORMALS = {
+  U: [0, 1, 0],
+  D: [0, -1, 0],
+  F: [0, 0, 1],
+  B: [0, 0, -1],
+  R: [1, 0, 0],
+  L: [-1, 0, 0],
+};
+
+/**
+ * 3D coordinates for a sticker on a given face
+ */
+function getSticker3D(face, row, col, N) {
+  const step = 2 / N;
+  const gap = 0.09 / N;
+
+  const u0 = -1 + col * step + gap;
+  const u1 = -1 + (col + 1) * step - gap;
+  const v0 = 1 - row * step - gap;
+  const v1 = 1 - (row + 1) * step + gap;
+
+  switch (face) {
+    case 'U':
+      return [
+        [u0, 1, -v0],
+        [u1, 1, -v0],
+        [u1, 1, -v1],
+        [u0, 1, -v1],
+      ];
+    case 'D':
+      return [
+        [u0, -1, v0],
+        [u1, -1, v0],
+        [u1, -1, v1],
+        [u0, -1, v1],
+      ];
+    case 'F':
+      return [
+        [u0, v0, 1],
+        [u1, v0, 1],
+        [u1, v1, 1],
+        [u0, v1, 1],
+      ];
+    case 'B':
+      return [
+        [-u0, v0, -1],
+        [-u1, v0, -1],
+        [-u1, v1, -1],
+        [-u0, v1, -1],
+      ];
+    case 'R':
+      return [
+        [1, v0, -u0],
+        [1, v0, -u1],
+        [1, v1, -u1],
+        [1, v1, -u0],
+      ];
+    case 'L':
+      return [
+        [-1, v0, u0],
+        [-1, v0, u1],
+        [-1, v1, u1],
+        [-1, v1, u0],
+      ];
+    default:
+      return [];
+  }
+}
+
+/**
+ * Rotate 3D point by yaw (around Y) and pitch (around X)
+ */
+function rotatePoint(p, ry, rx) {
+  // Rotate around Y
+  const cosY = Math.cos(ry);
+  const sinY = Math.sin(ry);
+  const x1 = p[0] * cosY + p[2] * sinY;
+  const y1 = p[1];
+  const z1 = -p[0] * sinY + p[2] * cosY;
+
+  // Rotate around X
+  const cosX = Math.cos(rx);
+  const sinX = Math.sin(rx);
+  const x2 = x1;
+  const y2 = y1 * cosX - z1 * sinX;
+  const z2 = y1 * sinX + z1 * cosX;
+
+  return [x2, y2, z2];
+}
+
+const DEFAULT_ROT_Y = -Math.PI / 4; // -45 deg
+const DEFAULT_ROT_X = Math.asin(Math.tan(Math.PI / 6)); // ~35.26 deg (isometric)
+
 export default function CubeNetVisualizer({
   scramble,
   event = '3x3',
   cube: passedCube,
-  size = 180,
+  size = 200,
   className = '',
   allow3DToggle = true,
 }) {
   const [viewMode, setViewMode] = useState('2d'); // '2d' or '3d'
-  const [flip3D, setFlip3D] = useState(false); // Front (U/F/R) vs Back (D/B/L)
+
+  // 3D rotation state (in radians)
+  const [rotY, setRotY] = useState(DEFAULT_ROT_Y);
+  const [rotX, setRotX] = useState(DEFAULT_ROT_X);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0, rotY: 0, rotX: 0 });
 
   const visualData = useMemo(() => {
     try {
@@ -42,12 +135,58 @@ export default function CubeNetVisualizer({
         type: 'cube',
         event: '3x3',
         name: '3x3x3',
-        data: { size: 3, faces: { U: Array(9).fill('U'), D: Array(9).fill('D'), F: Array(9).fill('F'), B: Array(9).fill('B'), L: Array(9).fill('L'), R: Array(9).fill('R') } },
+        data: {
+          size: 3,
+          faces: {
+            U: Array(9).fill('U'),
+            D: Array(9).fill('D'),
+            F: Array(9).fill('F'),
+            B: Array(9).fill('B'),
+            L: Array(9).fill('L'),
+            R: Array(9).fill('R'),
+          },
+        },
       };
     }
   }, [scramble, event, passedCube]);
 
   const isCube = visualData?.type === 'cube';
+
+  // Pointer drag handlers for 3D orbit
+  const handlePointerDown = (e) => {
+    if (viewMode !== '3d') return;
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      rotY,
+      rotX,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    const sensitivity = 0.008;
+
+    let newY = dragStartRef.current.rotY + dx * sensitivity;
+    let newX = dragStartRef.current.rotX + dy * sensitivity;
+
+    // Clamp pitch to avoid inversion flipping
+    newX = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, newX));
+
+    setRotY(newY);
+    setRotX(newX);
+  };
+
+  const handlePointerUp = (e) => {
+    setIsDragging(false);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+  };
 
   // ----------------------------------------------------
   // 1. RENDER 2D UNFOLDED CUBE NET (2x2, 3x3, 4x4, 5x5)
@@ -85,16 +224,20 @@ export default function CubeNetVisualizer({
               y={y}
               width={stickerSize}
               height={stickerSize}
-              rx={Math.max(1.2, 3 / N)}
+              rx={Math.max(1, 2.5 / N)}
               fill={fill}
-              stroke="#0f172a"
-              strokeWidth={Math.max(0.6, 2 / N)}
+              stroke="#090d16"
+              strokeWidth={Math.max(0.6, 1.8 / N)}
             />
           );
         }
       }
 
-      return <g key={faceKey}>{elements}</g>;
+      return (
+        <g key={faceKey} className="transition-opacity duration-150">
+          {elements}
+        </g>
+      );
     };
 
     const xU = faceSize + faceGap;
@@ -115,190 +258,172 @@ export default function CubeNetVisualizer({
     const xD = faceSize + faceGap;
     const yD = 2 * (faceSize + faceGap);
 
+    const svgWidth = Math.max(size, 200);
+    const svgHeight = (svgWidth * totalHeight) / totalWidth;
+
     return (
-      <svg
-        viewBox={`0 0 ${totalWidth} ${totalHeight}`}
-        width={size}
-        height={(size * totalHeight) / totalWidth}
-        className="drop-shadow-sm select-none"
-      >
-        {renderFace('U', xU, yU)}
-        {renderFace('L', xL, yL)}
-        {renderFace('F', xF, yF)}
-        {renderFace('R', xR, yR)}
-        {renderFace('B', xB, yB)}
-        {renderFace('D', xD, yD)}
-      </svg>
+      <div className="relative flex flex-col items-center">
+        <svg
+          viewBox={`0 0 ${totalWidth} ${totalHeight}`}
+          width={svgWidth}
+          height={svgHeight}
+          className="drop-shadow-sm select-none"
+        >
+          {renderFace('U', xU, yU)}
+          {renderFace('L', xL, yL)}
+          {renderFace('F', xF, yF)}
+          {renderFace('R', xR, yR)}
+          {renderFace('B', xB, yB)}
+          {renderFace('D', xD, yD)}
+        </svg>
+
+        {/* Subtle face markers */}
+        <div className="flex items-center gap-3 mt-1.5 text-[10px] text-[var(--text-muted)] font-mono select-none">
+          <span>Top: <b>White (U)</b></span>
+          <span>•</span>
+          <span>Front: <b>Green (F)</b></span>
+        </div>
+      </div>
     );
   };
 
   // ----------------------------------------------------
-  // 2. RENDER 3D ISOMETRIC DIGITAL CUBE (2x2, 3x3, 4x4, 5x5)
+  // 2. RENDER 3D INTERACTIVE DIGITAL CUBE
   // ----------------------------------------------------
   const renderCube3D = (cubeData) => {
     if (!cubeData || !cubeData.faces) return null;
     const N = cubeData.size || 3;
     const faces = cubeData.faces || {};
 
-    // Viewbox is centered around (0, 0)
-    // Isometric basis vectors:
-    // Right axis: (cos 30°, sin 30°)
-    // Left axis: (-cos 30°, sin 30°)
-    // Up axis: (0, -1)
-    const cos30 = Math.cos(Math.PI / 6);
-    const sin30 = Math.sin(Math.PI / 6);
+    const scale = 58; // projection scale
+    const allStickers = [];
 
-    const s = 34 / N; // sticker unit length
-    const g = 1.2 / N; // gap
-    const effectiveS = s - g;
+    // Collect all quads across all 6 faces
+    for (const face of ['U', 'D', 'F', 'B', 'R', 'L']) {
+      const stickers = faces[face] || Array(N * N).fill(face);
+      const normal = FACE_NORMALS[face];
+      const rotNorm = rotatePoint(normal, rotY, rotX);
 
-    // When flip3D is false: shows Top (U), Front (F), Right (R)
-    // When flip3D is true: shows Bottom (D), Back (B), Left (L)
-    const topFace = flip3D ? 'D' : 'U';
-    const leftFace = flip3D ? 'B' : 'F';
-    const rightFace = flip3D ? 'L' : 'R';
+      // Backface culling: only project if facing camera (Z > 0.02)
+      if (rotNorm[2] <= 0.02) continue;
 
-    const topStickers = faces[topFace] || Array(N * N).fill(topFace);
-    const leftStickers = faces[leftFace] || Array(N * N).fill(leftFace);
-    const rightStickers = faces[rightFace] || Array(N * N).fill(rightFace);
+      // Lighting calculation based on normal angle
+      const lightFactor = Math.max(0.65, Math.min(1.05, 0.75 + rotNorm[2] * 0.25 - rotNorm[1] * 0.1));
 
-    const polygons = [];
+      for (let row = 0; row < N; row++) {
+        for (let col = 0; col < N; col++) {
+          const idx = row * N + col;
+          const colorKey = stickers[idx];
+          const baseFill = CUBE_COLORS[colorKey] || '#64748b';
 
-    // Helper to project 3D point (u, v) on Top face
-    // u goes along Right (0..N), v goes along Left (0..N)
-    const projectTop = (u, v) => {
-      const x = (u - v) * cos30 * s;
-      const y = -N * s + (u + v) * sin30 * s;
-      return [x, y];
-    };
+          const quad3D = getSticker3D(face, row, col, N);
+          const quadRot = quad3D.map((pt) => rotatePoint(pt, rotY, rotX));
 
-    // Helper to project point on Left (Front) face
-    // u goes along Left (0..N), h goes Down (0..N)
-    const projectLeft = (u, h) => {
-      const x = -u * cos30 * s;
-      const y = u * sin30 * s + h * s;
-      return [x, y];
-    };
+          // Average Z for depth sorting (Painter's algorithm)
+          const avgZ = (quadRot[0][2] + quadRot[1][2] + quadRot[2][2] + quadRot[3][2]) / 4;
 
-    // Helper to project point on Right face
-    // u goes along Right (0..N), h goes Down (0..N)
-    const projectRight = (u, h) => {
-      const x = u * cos30 * s;
-      const y = u * sin30 * s + h * s;
-      return [x, y];
-    };
+          // 2D projection (orthographic isometric projection)
+          // SVG Y axis goes down, so negate Y
+          const points2D = quadRot.map((pt) => `${(pt[0] * scale).toFixed(2)},${(-pt[1] * scale).toFixed(2)}`).join(' ');
 
-    // 1. TOP FACE (U or D)
-    for (let row = 0; row < N; row++) {
-      for (let col = 0; col < N; col++) {
-        const idx = row * N + col;
-        const colorKey = topStickers[idx];
-        const fill = CUBE_COLORS[colorKey] || '#64748b';
-
-        // Coordinates on top face
-        const u0 = col + g / (2 * s);
-        const u1 = col + 1 - g / (2 * s);
-        const v0 = row + g / (2 * s);
-        const v1 = row + 1 - g / (2 * s);
-
-        const p1 = projectTop(u0, v0);
-        const p2 = projectTop(u1, v0);
-        const p3 = projectTop(u1, v1);
-        const p4 = projectTop(u0, v1);
-
-        polygons.push(
-          <polygon
-            key={`top-${idx}`}
-            points={`${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]}`}
-            fill={fill}
-            stroke="#0f172a"
-            strokeWidth="0.8"
-          />
-        );
+          allStickers.push({
+            id: `${face}-${idx}`,
+            avgZ,
+            points2D,
+            fill: baseFill,
+            lightFactor,
+          });
+        }
       }
     }
 
-    // 2. LEFT (FRONT) FACE
-    for (let row = 0; row < N; row++) {
-      for (let col = 0; col < N; col++) {
-        const idx = row * N + col;
-        const colorKey = leftStickers[idx];
-        const fill = CUBE_COLORS[colorKey] || '#64748b';
+    // Sort by depth (farthest first)
+    allStickers.sort((a, b) => a.avgZ - b.avgZ);
 
-        // col 0 is near the center corner, col N-1 is far left
-        const u0 = (N - col - 1) + g / (2 * s);
-        const u1 = (N - col) - g / (2 * s);
-        const h0 = row + g / (2 * s);
-        const h1 = row + 1 - g / (2 * s);
-
-        const p1 = projectLeft(u0, h0);
-        const p2 = projectLeft(u1, h0);
-        const p3 = projectLeft(u1, h1);
-        const p4 = projectLeft(u0, h1);
-
-        polygons.push(
-          <polygon
-            key={`left-${idx}`}
-            points={`${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]}`}
-            fill={fill}
-            stroke="#0f172a"
-            strokeWidth="0.8"
-          />
-        );
-      }
-    }
-
-    // 3. RIGHT FACE
-    for (let row = 0; row < N; row++) {
-      for (let col = 0; col < N; col++) {
-        const idx = row * N + col;
-        const colorKey = rightStickers[idx];
-        const fill = CUBE_COLORS[colorKey] || '#64748b';
-
-        const u0 = col + g / (2 * s);
-        const u1 = col + 1 - g / (2 * s);
-        const h0 = row + g / (2 * s);
-        const h1 = row + 1 - g / (2 * s);
-
-        const p1 = projectRight(u0, h0);
-        const p2 = projectRight(u1, h0);
-        const p3 = projectRight(u1, h1);
-        const p4 = projectRight(u0, h1);
-
-        polygons.push(
-          <polygon
-            key={`right-${idx}`}
-            points={`${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]}`}
-            fill={fill}
-            stroke="#0f172a"
-            strokeWidth="0.8"
-          />
-        );
-      }
-    }
-
-    const bound = N * s * 1.8;
+    const bound = 110;
+    const svgSize = Math.max(size, 200);
 
     return (
       <div className="relative flex flex-col items-center">
-        <svg
-          viewBox={`-${bound} -${bound} ${bound * 2} ${bound * 2.1}`}
-          width={size}
-          height={size}
-          className="drop-shadow-md select-none"
+        {/* Interactive 3D Canvas */}
+        <div
+          className={`cursor-${isDragging ? 'grabbing' : 'grab'} touch-none select-none`}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+          title="Drag to rotate cube in 3D"
         >
-          {polygons}
-        </svg>
+          <svg
+            viewBox={`-${bound} -${bound} ${bound * 2} ${bound * 2}`}
+            width={svgSize}
+            height={svgSize}
+            className="drop-shadow-md"
+          >
+            {allStickers.map((s) => (
+              <polygon
+                key={s.id}
+                points={s.points2D}
+                fill={s.fill}
+                stroke="#090d16"
+                strokeWidth="0.9"
+                strokeLinejoin="round"
+                style={{
+                  filter: s.lightFactor !== 1 ? `brightness(${s.lightFactor})` : undefined,
+                }}
+              />
+            ))}
+          </svg>
+        </div>
 
-        <button
-          type="button"
-          onClick={() => setFlip3D((f) => !f)}
-          className="mt-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white transition-all flex items-center gap-1 shadow-sm"
-          title="Flip viewing angle 180°"
-        >
-          <Rotate3d className="w-3 h-3 text-[var(--accent-cyan)]" />
-          {flip3D ? 'Viewing Back (D/B/L)' : 'Viewing Front (U/F/R)'}
-        </button>
+        {/* View Angle Presets & Reset */}
+        <div className="mt-2 flex items-center gap-1.5 flex-wrap justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              setRotY(-Math.PI / 4);
+              setRotX(DEFAULT_ROT_X);
+            }}
+            className="px-2 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white transition-all shadow-sm"
+          >
+            Front (UFR)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRotY((3 * Math.PI) / 4);
+              setRotX(DEFAULT_ROT_X);
+            }}
+            className="px-2 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white transition-all shadow-sm"
+          >
+            Back (UBL)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRotY(-Math.PI / 4);
+              setRotX(-DEFAULT_ROT_X);
+            }}
+            className="px-2 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white transition-all shadow-sm"
+          >
+            Bottom (DFR)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRotY(DEFAULT_ROT_Y);
+              setRotX(DEFAULT_ROT_X);
+            }}
+            className="p-1 rounded bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white transition-all"
+            title="Reset to default angle"
+          >
+            <RotateCcw className="w-2.5 h-2.5" />
+          </button>
+        </div>
+
+        <span className="text-[9px] text-[var(--text-muted)] mt-1">
+          Drag to freely orbit in 3D
+        </span>
       </div>
     );
   };
@@ -310,38 +435,49 @@ export default function CubeNetVisualizer({
     if (!polyData || !Array.isArray(polyData.polygons)) return null;
     const { width, height, polygons } = polyData;
 
+    // Responsive scaling
+    const isMega = visualData?.event === 'mega';
+    const svgWidth = isMega ? Math.max(size, 260) : Math.max(size, 200);
+    const svgHeight = (svgWidth * height) / width;
+
     return (
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        width={size}
-        height={(size * height) / width}
-        className="drop-shadow-sm select-none"
-      >
-        {polygons.map((p) => (
-          <polygon
-            key={p.id}
-            points={p.points}
-            fill={p.fill}
-            stroke="#0f172a"
-            strokeWidth={width > 10 ? '0.08' : '0.04'}
-            strokeLinejoin="round"
-          />
-        ))}
-      </svg>
+      <div className="flex flex-col items-center">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          width={svgWidth}
+          height={svgHeight}
+          className="drop-shadow-sm select-none"
+        >
+          {polygons.map((p) => (
+            <polygon
+              key={p.id}
+              points={p.points}
+              fill={p.fill}
+              stroke="#090d16"
+              strokeWidth={width > 10 ? '0.07' : isMega ? '0.035' : '0.045'}
+              strokeLinejoin="round"
+            />
+          ))}
+        </svg>
+
+        <span className="text-[10px] text-[var(--text-muted)] mt-2 font-mono">
+          WCA Standard Unfolded Net
+        </span>
+      </div>
     );
   };
 
   return (
-    <div className={`cube-net-container inline-flex flex-col items-center ${className}`}>
+    <div className={`cube-net-container inline-flex flex-col items-center max-w-full ${className}`}>
       {/* Header bar with puzzle type and 2D/3D toggle */}
-      <div className="w-full flex items-center justify-between gap-2 mb-2 px-1">
-        <span className="text-[11px] font-bold text-[var(--accent-cyan)] uppercase tracking-wider flex items-center gap-1">
+      <div className="w-full flex items-center justify-between gap-3 mb-2 px-1">
+        <span className="text-[11px] font-bold text-[var(--accent-cyan)] uppercase tracking-wider flex items-center gap-1.5 shrink-0">
           <Compass className="w-3.5 h-3.5" />
-          {visualData.name} Scramble Net
+          {visualData?.name || 'Cube'} Scramble
         </span>
 
         {isCube && allow3DToggle && (
-          <div className="inline-flex rounded-lg bg-[var(--bg-input)] p-0.5 border border-[var(--border-subtle)]">
+          <div className="inline-flex rounded-lg bg-[var(--bg-input)] p-0.5 border border-[var(--border-subtle)] shrink-0">
             <button
               type="button"
               className={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all ${
@@ -356,22 +492,23 @@ export default function CubeNetVisualizer({
             </button>
             <button
               type="button"
-              className={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all ${
+              className={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all flex items-center gap-1 ${
                 viewMode === '3d'
                   ? 'bg-[var(--accent-cyan)] text-slate-900 shadow-sm'
                   : 'text-[var(--text-muted)] hover:text-white'
               }`}
               onClick={() => setViewMode('3d')}
-              title="3D Digital Isometric View"
+              title="Interactive 3D Orbit View"
             >
-              3D Cube
+              <Rotate3d className="w-3 h-3" />
+              3D Orbit
             </button>
           </div>
         )}
       </div>
 
       {/* Main Diagram Area */}
-      <div className="flex items-center justify-center p-2 rounded-xl bg-[var(--bg-primary)]/80 border border-[var(--border-subtle)] shadow-inner">
+      <div className="flex items-center justify-center p-3 rounded-xl bg-[var(--bg-primary)]/90 border border-[var(--border-subtle)] shadow-inner w-full min-w-[220px]">
         {isCube ? (
           viewMode === '3d' ? (
             renderCube3D(visualData.data)

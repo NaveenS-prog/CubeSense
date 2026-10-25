@@ -29,12 +29,12 @@ export const PYRA_COLORS = [
 ];
 
 export const SKEWB_COLORS = [
-  '#f8fafc', // U: White
-  '#ef4444', // R: Red
-  '#22c55e', // F: Green
-  '#facc15', // D: Yellow
-  '#f97316', // L: Orange
-  '#3b82f6', // B: Blue
+  '#facc15', // 0: D (Yellow)
+  '#f97316', // 1: L (Orange)
+  '#3b82f6', // 2: B (Blue)
+  '#f8fafc', // 3: U (White)
+  '#ef4444', // 4: R (Red)
+  '#22c55e', // 5: F (Green)
 ];
 
 export const MEGA_COLORS = [

@@ -559,7 +559,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
               type="button"
               className={`icon-btn ${showVisualizer ? 'active' : ''}`}
               onClick={() => setShowVisualizer((v) => !v)}
-              title="Toggle 2D Scramble Net Visualizer"
+              title="Toggle Scramble Visualizer (2D Net / 3D Orbit)"
             >
               {showVisualizer ? <EyeOff className="w-4 h-4 text-white" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -614,10 +614,10 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
             </button>
           </div>
 
-          {/* Collapsible 2D Unfolded Scramble Net */}
+          {/* Collapsible Scramble Visualizer */}
           {showVisualizer && (
             <div className="scramble-visualizer-box">
-              <CubeNetVisualizer scramble={scramble} event={selectedEvent} size={180} />
+              <CubeNetVisualizer scramble={scramble} event={selectedEvent} size={200} />
             </div>
           )}
         </div>

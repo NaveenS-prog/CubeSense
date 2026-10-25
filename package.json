@@ -2,6 +2,7 @@
   "name": "cubesense",
   "version": "1.0.0",
   "description": "A modern web app for speedcubing with smart timer and algorithm teacher",
+  "type": "module",
   "main": "index.html",
   "scripts": {
     "dev": "vite",
