@@ -87,6 +87,23 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
   const warned12sRef = useRef(false);
   const lastPbRef = useRef(null);
 
+  const selectedEventRef = useRef(selectedEvent);
+  useEffect(() => { selectedEventRef.current = selectedEvent; }, [selectedEvent]);
+
+  const addSolveRef = useRef(addSolve);
+  useEffect(() => { addSolveRef.current = addSolve; }, [addSolve]);
+
+  const useInspectionRef = useRef(useInspection);
+  useEffect(() => { useInspectionRef.current = useInspection; }, [useInspection]);
+
+  const recordSolveRef = useRef();
+  const stopSolveRef = useRef();
+  const startSolveRef = useRef();
+  const startInspectionRef = useRef();
+  const beginHoldToStartRef = useRef();
+  const abortHoldToStartRef = useRef();
+  const hardStopRef = useRef();
+
   useEffect(() => { timerStatusRef.current = timerStatus; }, [timerStatus]);
   useEffect(() => { scrambleRef.current = scramble; }, [scramble]);
   useEffect(() => { inspectionPenaltyRef.current = inspectionPenalty; }, [inspectionPenalty]);
@@ -127,8 +144,8 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
   const recordSolve = (record) => {
     try {
       const isPb = lastPbRef.current !== null && record.finalTime !== null && record.finalTime < lastPbRef.current;
-      addSolve({
-        event: selectedEvent,
+      addSolveRef.current({
+        event: selectedEventRef.current,
         ...record,
         date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       });
@@ -146,6 +163,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
       console.error('Error recording solve:', err);
     }
   };
+  recordSolveRef.current = recordSolve;
 
   const nextScramble = useCallback((event = selectedEvent) => {
     if (practiceCase) {
@@ -213,6 +231,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
 
     rafRef.current = requestAnimationFrame(tickInspection);
   };
+  startInspectionRef.current = startInspection;
 
   // 2. Begin Hold To Start (Hands down on pads or Space held)
   const beginHoldToStart = () => {
@@ -233,6 +252,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
       }
     }, HOLD_TO_START_MS);
   };
+  beginHoldToStartRef.current = beginHoldToStart;
 
   const abortHoldToStart = () => {
     clearHoldTimeout();
@@ -240,6 +260,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
       setStatus(useInspection && inspectionStartRef.current > 0 ? 'inspection' : 'idle');
     }
   };
+  abortHoldToStartRef.current = abortHoldToStart;
 
   // 3. Start Solve (Hands lifted or Space released when ready)
   const startSolve = () => {
@@ -264,6 +285,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
 
     rafRef.current = requestAnimationFrame(tickSolve);
   };
+  startSolveRef.current = startSolve;
 
   // 4. Stop Solve (Hands back on pads or Any key pressed)
   const stopSolve = () => {
@@ -282,9 +304,9 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
         console.warn('Stop sound error:', e);
       }
 
-      recordSolve({
+      recordSolveRef.current?.({
         type: 'solve',
-        event: selectedEvent,
+        event: selectedEventRef.current,
         penalty: inspectionPenaltyRef.current,
         time: rawTime,
         finalTime,
@@ -296,6 +318,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
       setStatus('stopped');
     }
   };
+  stopSolveRef.current = stopSolve;
 
   const resetScramble = () => {
     clearHoldTimeout();
@@ -319,6 +342,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
     setPenalty(null);
     setStatus('idle');
   };
+  hardStopRef.current = hardStop;
 
   const copyScramble = async () => {
     try {
@@ -366,7 +390,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
       if (e.code === 'Escape') {
         if (timerStatusRef.current !== 'idle') {
           e.preventDefault();
-          hardStop();
+          hardStopRef.current?.();
         }
         return;
       }
@@ -374,7 +398,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
       if (timerStatusRef.current === 'running') {
         e.preventDefault();
         if (e.code === 'Space') ignoreNextSpaceUpRef.current = true;
-        stopSolve();
+        stopSolveRef.current?.();
         return;
       }
 
@@ -382,9 +406,9 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
       e.preventDefault();
 
       if (timerStatusRef.current === 'inspection') {
-        beginHoldToStart();
-      } else if (!useInspection && (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped')) {
-        beginHoldToStart();
+        beginHoldToStartRef.current?.();
+      } else if (!useInspectionRef.current && (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped')) {
+        beginHoldToStartRef.current?.();
       }
     };
 
@@ -397,18 +421,18 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
         return;
       }
 
-      if (useInspection && (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped')) {
-        startInspection();
+      if (useInspectionRef.current && (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped')) {
+        startInspectionRef.current?.();
         return;
       }
 
       if (timerStatusRef.current === 'holding') {
-        abortHoldToStart();
+        abortHoldToStartRef.current?.();
         return;
       }
 
       if (timerStatusRef.current === 'ready') {
-        startSolve();
+        startSolveRef.current?.();
       }
     };
 
@@ -421,7 +445,7 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
       clearHoldTimeout();
       stopAnimation();
     };
-  }, [useInspection]);
+  }, []);
 
   // Touchpad event handlers
   useEffect(() => {
@@ -432,18 +456,18 @@ function SmartTimer({ session, practiceCase, onExitPractice, onOpenAuth }) {
       touchpadsDownRef.current = bothPadsTouched;
 
       if (!wasTouched && bothPadsTouched) {
-        if (timerStatusRef.current === 'inspection' || (!useInspection && (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped'))) {
-          beginHoldToStart();
+        if (timerStatusRef.current === 'inspection' || (!useInspectionRef.current && (timerStatusRef.current === 'idle' || timerStatusRef.current === 'stopped'))) {
+          beginHoldToStartRef.current?.();
         }
       } else if (wasTouched && !bothPadsTouched && timerStatusRef.current === 'holding') {
-        abortHoldToStart();
+        abortHoldToStartRef.current?.();
       } else if (wasTouched && !bothPadsTouched && timerStatusRef.current === 'ready') {
-        startSolve();
+        startSolveRef.current?.();
       } else if (!wasTouched && bothPadsTouched && timerStatusRef.current === 'running') {
-        stopSolve();
+        stopSolveRef.current?.();
       }
     }
-  }, [touchLeftDown, touchRightDown, showTouchpads, useInspection]);
+  }, [touchLeftDown, touchRightDown, showTouchpads]);
 
   // Display time formatting
   const displayLabel = () => {

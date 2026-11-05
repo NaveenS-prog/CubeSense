@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
 
 const LEGACY_SESSION_ID = 'legacy-default';
@@ -97,6 +97,11 @@ export function useTimerSessions(authSession) {
   const [loading, setLoading] = useState(true);
   const [cloudSessionsEnabled, setCloudSessionsEnabled] = useState(false);
 
+  const activeSessionIdRef = useRef(activeSessionId);
+  useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
+  const sessionsRef = useRef(sessions);
+  useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
+
   const persistLocal = useCallback((nextSessions, nextActiveId, nextSolvesBySession) => {
     writeLocal(userId, {
       activeSessionId: nextActiveId,
@@ -125,7 +130,8 @@ export function useTimerSessions(authSession) {
     }
 
     if (stored?.sessions?.length) {
-      const sid = stored.activeSessionId || stored.sessions[0].id;
+      const matchingSid = stored.sessions.find((s) => s.id === stored.activeSessionId)?.id;
+      const sid = matchingSid || stored.sessions[0].id;
       applySessionState(
         stored.sessions,
         sid,
@@ -362,7 +368,7 @@ export function useTimerSessions(authSession) {
 
       const { data: cloudSolves, error } = await fetchCloudSolves(
         sessionId === LEGACY_SESSION_ID ? null : sessionId,
-        sessionId !== LEGACY_SESSION_ID,
+        false,
       );
 
       if (error) {
@@ -421,15 +427,23 @@ export function useTimerSessions(authSession) {
   }, [sessions, userId, cloudSessionsEnabled, applySessionState]);
 
   const addSolve = useCallback(async (record) => {
-    let currentSessionId = activeSessionId;
-    let currentSessions = sessions;
+    let currentSessionId = activeSessionIdRef.current || activeSessionId;
+    let currentSessions = (sessionsRef.current?.length ? sessionsRef.current : sessions);
 
     if (!currentSessionId || !currentSessions.length) {
-      const defaultSession = createSessionMeta('New Session');
-      currentSessions = [defaultSession];
-      currentSessionId = defaultSession.id;
-      setSessions(currentSessions);
-      setActiveSessionId(currentSessionId);
+      const local = readLocal(userId);
+      if (local?.activeSessionId && local?.sessions?.length) {
+        currentSessionId = local.activeSessionId;
+        currentSessions = local.sessions;
+        setSessions(currentSessions);
+        setActiveSessionId(currentSessionId);
+      } else {
+        const defaultSession = createSessionMeta('New Session');
+        currentSessions = [defaultSession];
+        currentSessionId = defaultSession.id;
+        setSessions(currentSessions);
+        setActiveSessionId(currentSessionId);
+      }
     }
 
     const localId = generateUUID();
@@ -509,13 +523,15 @@ export function useTimerSessions(authSession) {
 
   const deleteSolve = useCallback(async (record) => {
     const key = record.id || record.localId;
+    const currentSid = activeSessionIdRef.current || activeSessionId;
+    const curSessions = sessionsRef.current?.length ? sessionsRef.current : sessions;
 
     setSolves((prev) => {
       const next = prev.filter((item) => (item.id || item.localId) !== key);
       const local = readLocal(userId) || { solvesBySession: {} };
-      persistLocal(sessions, activeSessionId, {
+      persistLocal(curSessions, currentSid, {
         ...local.solvesBySession,
-        [activeSessionId]: next,
+        [currentSid]: next,
       });
       return next;
     });
@@ -545,13 +561,15 @@ export function useTimerSessions(authSession) {
 
     const updated = { ...record, penalty, finalTime };
     const key = record.id || record.localId;
+    const currentSid = activeSessionIdRef.current || activeSessionId;
+    const curSessions = sessionsRef.current?.length ? sessionsRef.current : sessions;
 
     setSolves((prev) => {
       const next = prev.map((item) => ((item.id || item.localId) === key ? updated : item));
       const local = readLocal(userId) || { solvesBySession: {} };
-      persistLocal(sessions, activeSessionId, {
+      persistLocal(curSessions, currentSid, {
         ...local.solvesBySession,
-        [activeSessionId]: next,
+        [currentSid]: next,
       });
       return next;
     });
@@ -573,18 +591,20 @@ export function useTimerSessions(authSession) {
   }, [activeSessionId, sessions, userId, persistLocal]);
 
   const clearCurrentSession = useCallback(async () => {
+    const currentSid = activeSessionIdRef.current || activeSessionId;
+    const curSessions = sessionsRef.current?.length ? sessionsRef.current : sessions;
     setSolves([]);
     const local = readLocal(userId) || { solvesBySession: {} };
-    persistLocal(sessions, activeSessionId, {
+    persistLocal(curSessions, currentSid, {
       ...local.solvesBySession,
-      [activeSessionId]: [],
+      [currentSid]: [],
     });
 
-    if (isSupabaseConfigured && userId && activeSessionId) {
+    if (isSupabaseConfigured && userId && currentSid) {
       const { error } = await supabase
         .from('solves')
         .delete()
-        .eq('session_id', activeSessionId)
+        .eq('session_id', currentSid)
         .eq('user_id', userId);
 
       if (error) {
@@ -596,19 +616,20 @@ export function useTimerSessions(authSession) {
   const renameSession = useCallback(async (newName) => {
     if (!newName?.trim()) return;
     const trimmed = newName.trim();
+    const currentSid = activeSessionIdRef.current || activeSessionId;
 
     setSessions((prev) => {
-      const next = prev.map((s) => (s.id === activeSessionId ? { ...s, name: trimmed } : s));
+      const next = prev.map((s) => (s.id === currentSid ? { ...s, name: trimmed } : s));
       const local = readLocal(userId) || { solvesBySession: {} };
-      persistLocal(next, activeSessionId, local.solvesBySession || {});
+      persistLocal(next, currentSid, local.solvesBySession || {});
       return next;
     });
 
-    if (isSupabaseConfigured && userId && cloudSessionsEnabled && activeSessionId) {
+    if (isSupabaseConfigured && userId && cloudSessionsEnabled && currentSid) {
       await supabase
         .from('timing_sessions')
         .update({ name: trimmed })
-        .eq('id', activeSessionId)
+        .eq('id', currentSid)
         .eq('user_id', userId);
     }
   }, [activeSessionId, userId, cloudSessionsEnabled, persistLocal]);

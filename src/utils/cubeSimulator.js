@@ -127,15 +127,14 @@ export function applyMove(cube, move) {
   if (!clean) return cube;
 
   // Extract base face / notation and modifier
-  const modifier = clean.slice(-1);
   let base = clean;
   let times = 1;
 
-  if (modifier === "'") {
-    times = 3;
-    base = clean.slice(0, -1);
-  } else if (modifier === '2') {
+  if (clean.endsWith("2'") || clean.endsWith("2")) {
     times = 2;
+    base = clean.replace(/2'?$/, '');
+  } else if (clean.endsWith("'")) {
+    times = 3;
     base = clean.slice(0, -1);
   }
 
